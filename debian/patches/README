@@ -1,0 +1,10 @@
+From: Ludovic Rousseau <rousseau@debian.org>
+Date: Sat Aug 10 12:08:11 CEST 2019
+Subject: create an empty README file
+
+Description: dh_autoreconf fails if no README file is present
+
+--- /dev/null
++++ b/README
+@@ -0,0 +1 @@
++empty file
