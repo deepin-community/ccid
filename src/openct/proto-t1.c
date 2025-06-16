@@ -8,6 +8,7 @@
  */
 
 #include <config.h>
+#include <stdbool.h>
 
 #include <pcsclite.h>
 #include <ifdhandler.h>
@@ -42,11 +43,6 @@
 #define T1_S_WTX		0x03
 
 #define swap_nibbles(x) ( (x >> 4) | ((x & 0xF) << 4) )
-
-#ifndef TRUE
-#define TRUE 1
-#define FALSE 0
-#endif
 
 #define NAD 0
 #define PCB 1
@@ -104,7 +100,7 @@ int t1_init(t1_state_t * t1, int lun)
 	t1_set_defaults(t1);
 	t1_set_param(t1, IFD_PROTOCOL_T1_CHECKSUM_LRC, 0);
 	t1_set_param(t1, IFD_PROTOCOL_T1_STATE, SENDING);
-	t1_set_param(t1, IFD_PROTOCOL_T1_MORE, FALSE);
+	t1_set_param(t1, IFD_PROTOCOL_T1_MORE, false);
 
 	t1->lun = lun;
 
@@ -159,7 +155,8 @@ int t1_transceive(t1_state_t * t1, unsigned int dad,
 {
 	ct_buf_t sbuf, rbuf, tbuf;
 	unsigned char sdata[T1_BUFFER_SIZE], sblk[5];
-	unsigned int slen, retries, resyncs;
+	unsigned int slen, resyncs;
+	int retries;
 	size_t last_send = 0;
 
 	if (snd_len == 0)
@@ -518,7 +515,7 @@ resync:
 		slen = t1_build(t1, sdata, dad, T1_S_BLOCK | T1_S_RESYNC, NULL,
 				NULL);
 		t1->state = RESYNCH;
-		t1->more = FALSE;
+		t1->more = false;
 		retries = 1;
 		continue;
 	}
@@ -560,13 +557,13 @@ unsigned int t1_build(t1_state_t * t1, unsigned char *block,
 	ct_buf_t *bp, size_t *lenp)
 {
 	unsigned int len;
-	char more = FALSE;
+	bool more = false;
 
 	len = bp ? ct_buf_avail(bp) : 0;
 	if (len > t1->ifsc) {
 		pcb |= T1_MORE_BLOCKS;
 		len = t1->ifsc;
-		more = TRUE;
+		more = true;
 	}
 
 	/* Add the sequence number */
@@ -745,7 +742,7 @@ int t1_negotiate_ifsd(t1_state_t * t1, unsigned int dad, int ifsd)
 	ct_buf_t sbuf;
 	unsigned char sdata[T1_BUFFER_SIZE];
 	unsigned int slen;
-	unsigned int retries;
+	int retries;
 	size_t snd_len;
 	int n;
 	unsigned char snd_buf[1];
@@ -759,18 +756,18 @@ int t1_negotiate_ifsd(t1_state_t * t1, unsigned int dad, int ifsd)
 	/* Initialize send/recv buffer */
 	ct_buf_set(&sbuf, (void *)snd_buf, snd_len);
 
-	while (TRUE)
+	while (true)
 	{
 		/* Build the block */
 		slen = t1_build(t1, sdata, 0, T1_S_BLOCK | T1_S_IFS, &sbuf, NULL);
 
-		/* Send the block */
-		n = t1_xcv(t1, sdata, slen, sizeof(sdata));
-
 		retries--;
 		/* ISO 7816-3 Rule 7.4.2 */
-		if (retries <= 0)
+		if (retries < 0)
 			goto error;
+
+		/* Send the block */
+		n = t1_xcv(t1, sdata, slen, sizeof(sdata));
 
 		if (-1 == n)
 		{

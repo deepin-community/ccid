@@ -114,7 +114,7 @@ typedef struct
 	/*
 	 * does the reader echoes the serial communication bytes?
 	 */
-	int echo;
+	bool echo;
 
 	/*
 	 * serial communication buffer
@@ -220,13 +220,16 @@ status_t WriteSerial(unsigned int reader_index, unsigned int length,
  *
  *****************************************************************************/
 status_t ReadSerial(unsigned int reader_index,
-	unsigned int *length, unsigned char *buffer)
+	unsigned int *length, unsigned char *buffer, int bSeq)
 {
 	unsigned char c;
 	int rv;
 	int echo;
 	int to_read;
 	int i;
+
+	/* ignore bSeq */
+	(void)bSeq;
 
 	/* we get the echo first */
 	echo = serialDevice[reader_index].echo;
@@ -336,7 +339,7 @@ ack:
 
 	if (echo)
 	{
-		echo = FALSE;
+		echo = false;
 		goto start;
 	}
 
@@ -517,7 +520,7 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 {
 	int readerID;
 	int i;
-	int already_used = FALSE;
+	bool already_used = false;
 	static int previous_reader_index = -1;
 
 	readerID = GEMPCTWIN;
@@ -538,7 +541,7 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 		if (serialDevice[i].device
 			&& strcmp(serialDevice[i].device, dev_name) == 0)
 		{
-			already_used = TRUE;
+			already_used = true;
 
 			DEBUG_COMM2("%s already used. Multi-slot reader?", dev_name);
 			break;
@@ -620,6 +623,7 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 	serialDevice[reader_index].ccid.bPINSupport = 0x0;
 	serialDevice[reader_index].ccid.dwMaxDataRate = 344086;
 	serialDevice[reader_index].ccid.bMaxSlotIndex = 0;
+	serialDevice[reader_index].ccid.bMaxCCIDBusySlots = 1;
 	serialDevice[reader_index].ccid.arrayOfSupportedDataRates = SerialTwinDataRates;
 	serialDevice[reader_index].ccid.readTimeout = DEFAULT_COM_READ_TIMEOUT;
 	serialDevice[reader_index].ccid.dwSlotStatus = IFD_ICC_PRESENT;
@@ -627,9 +631,9 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 	serialDevice[reader_index].ccid.gemalto_firmware_features = NULL;
 	serialDevice[reader_index].ccid.dwProtocols = SCARD_PROTOCOL_T0 | SCARD_PROTOCOL_T1;
 #ifdef ENABLE_ZLP
-	serialDevice[reader_index].ccid.zlp = FALSE;
+	serialDevice[reader_index].ccid.zlp = false;
 #endif
-	serialDevice[reader_index].echo = TRUE;
+	serialDevice[reader_index].echo = true;
 
 	/* change some values depending on the reader */
 	switch (readerID)
@@ -637,14 +641,14 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 		case GEMCOREPOSPRO:
 			serialDevice[reader_index].ccid.bMaxSlotIndex = 4;	/* 5 slots */
 			serialDevice[reader_index].ccid.arrayOfSupportedDataRates = SerialExtendedDataRates;
-			serialDevice[reader_index].echo = FALSE;
+			serialDevice[reader_index].echo = false;
 			serialDevice[reader_index].ccid.dwMaxDataRate = 500000;
 			break;
 
 		case GEMCORESIMPRO:
 			serialDevice[reader_index].ccid.bMaxSlotIndex = 1; /* 2 slots */
 			serialDevice[reader_index].ccid.arrayOfSupportedDataRates = SerialExtendedDataRates;
-			serialDevice[reader_index].echo = FALSE;
+			serialDevice[reader_index].echo = false;
 			serialDevice[reader_index].ccid.dwMaxDataRate = 500000;
 			break;
 
@@ -652,7 +656,7 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 			serialDevice[reader_index].ccid.dwDefaultClock = 4800;
 			serialDevice[reader_index].ccid.bMaxSlotIndex = 1; /* 2 slots */
 			serialDevice[reader_index].ccid.arrayOfSupportedDataRates = SIMPro2DataRates;
-			serialDevice[reader_index].echo = FALSE;
+			serialDevice[reader_index].echo = false;
 			serialDevice[reader_index].ccid.dwMaxDataRate = 825806;
 			break;
 
@@ -668,7 +672,7 @@ static status_t set_ccid_descriptor(unsigned int reader_index,
 			serialDevice[reader_index].ccid.dwMaxDataRate = 826000;
 			serialDevice[reader_index].ccid.arrayOfSupportedDataRates = NULL;
 			serialDevice[reader_index].ccid.bMaxSlotIndex = 1;	/* 2 slots */
-			serialDevice[reader_index].echo = FALSE;
+			serialDevice[reader_index].echo = false;
 			break;
 
 	}
@@ -932,6 +936,21 @@ status_t CloseSerial(unsigned int reader_index)
 
 	return STATUS_SUCCESS;
 } /* CloseSerial */
+
+
+/*****************************************************************************
+ *
+ *					DisconnectSerial
+ *
+ ****************************************************************************/
+status_t DisconnectSerial(unsigned int reader_index)
+{
+	(void)reader_index;
+
+	DEBUG_COMM("Disconnect reader");
+
+	return STATUS_UNSUCCESSFUL;
+} /* DisconnectSerial */
 
 
 /*****************************************************************************

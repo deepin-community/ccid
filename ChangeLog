@@ -1,4 +1,2135 @@
-commit 74642f87f9e1a937e807acd3a7d2ef600b8d151c (HEAD -> master, zotac/master, origin/master, origin/HEAD)
+commit 9a7ad431a184771fdb7228da922c89daf5d55acb (HEAD -> master, zotac/master)
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Jan 31 16:26:09 2023 +0100
+
+    Release 1.5.2
+    
+    Signed-off-by: Ludovic Rousseau <ludovic.rousseau@free.fr>
+
+ README.md    | 12 ++++++++++++
+ configure.ac |  2 +-
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+commit ae7e716f8b0fee0effabe80aeea7bca2c066a291 (zotac/AlcorMicro)
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Jan 15 15:06:32 2023 +0100
+
+    Hack for AlcorMicro AU9560 and Acos-ID card
+    
+    Perform a double reset cold + hot so that the Acos-ID card uses a lower
+    communication speed.
+    
+    The cold ATR of this card is:
+    3B DF 96 FF 91 01 31 FE 46 80 31 90 52 41 02 64 05 02 00 AC 73 D6 22 C0 17
+    While the hot ATR is:
+    3B DF 18 FF 91 01 31 FE 46 80 31 90 52 41 02 64 05 02 00 AC 73 D6 22 C0 99
+    
+    Note how TA1 changed from 0x96 (250000 bits/s at 4 MHz) to 0x18
+    (129032 bits/s at 4.00 MHz).
+    
+    The pcscd trace is:
+    00000002 [] ifdhandler.c:926:IFDHSetProtocolParameters() Set adapted speed to 115625 bauds
+    00000003 [] ifdhandler.c:1039:IFDHSetProtocolParameters() BWI/CWI (TB3) present: 0x46
+    00000002 [] ifdhandler.c:1074:IFDHSetProtocolParameters() IFSC (TA3) present: 254
+    00000002 [] ifdhandler.c:1078:IFDHSetProtocolParameters() Timeout: 2928 ms
+    00000003 [] commands.c:2324:SetParameters() length: 7 bytes
+    00000006 [] -> 000000 61 07 00 00 00 00 0D 01 00 00 95 10 FF 46 00 FE 00
+    02267701 [] <- 000000 82 00 00 00 00 00 0D 41 FE 00
+    00000021 [] commands.c:2351:SetParameters Card absent or mute
+    00000011 [] ifdhandler.c:1246:IFDHPowerICC() action: Reset, usb:058f/9540:libudev:0:/dev/bus/usb/003/003 (lun: 0)
+    00000006 [] -> 000000 62 00 00 00 00 00 0E 00 00 00
+    00194208 [] <- 000000 80 19 00 00 00 00 0E 00 00 00 3B DF 96 FF 91 01 31 FE 46 80 31 90 52 41 02 64 05 02 00 AC 73 D6 22 C0 17
+    00000025 [] ifdhandler.c:1246:IFDHPowerICC() action: Reset, usb:058f/9540:libudev:0:/dev/bus/usb/003/003 (lun: 0)
+    00000007 [] -> 000000 62 00 00 00 00 00 0F 00 00 00
+    00056894 [] <- 000000 80 19 00 00 00 00 0F 00 00 00 3B DF 18 FF 91 01 31 FE 46 80 31 90 52 41 02 64 05 02 00 AC 73 D6 22 C0 99
+    00000022 [] winscard.c:430:SCardConnect() Active Protocol: T=1
+
+ src/ifdhandler.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+commit 02f953b72bf55005f2483163fc35b2f6f0bbd30a
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 11 16:04:08 2023 +0100
+
+    Hack for AlcorMicro AU9560 and Acos-ID card
+    
+    The Acos-ID card 3BDF96FF910131FE4680319052410264050200AC73D622C017 does
+    not like when the driver tries to negotiate a speed lower than its
+    TA1=0x96
+    
+    The AlcorMicro AU9560 does not support the card speed so must negotiate a
+    lower speed using Set Paramaters.
+    But that fails:
+    00000004 [] ifdhandler.c:858:IFDHSetProtocolParameters() Card can work at 231250 bauds
+    00000003 [] ifdhandler.c:897:IFDHSetProtocolParameters() Reader can't do more than 200000 bauds
+    00000002 [] ifdhandler.c:2176:find_baud_rate() Card baud rate: 115625
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 1807
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 1989
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 2409
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 2487
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 3315
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 3613
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 3978
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 4818
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 4973
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 6631
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 7227
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 7957
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 9635
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 9946
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 13262
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 14453
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 15914
+    00000004 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 19271
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 19892
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 21680
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 23871
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 26523
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 28906
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 29839
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 31828
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 36133
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 38542
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 39785
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 43359
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 48177
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 49731
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 53047
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 57813
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 59677
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 63656
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 66308
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 72266
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 77083
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 79570
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 86719
+    00000001 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 96354
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 99462
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 106093
+    00000002 [] ifdhandler.c:2185:find_baud_rate() Reader can do: 115625
+    00000002 [] ifdhandler.c:926:IFDHSetProtocolParameters() Set adapted speed to 115625 bauds
+    00000002 [] ifdhandler.c:1039:IFDHSetProtocolParameters() BWI/CWI (TB3) present: 0x46
+    00000003 [] ifdhandler.c:1074:IFDHSetProtocolParameters() IFSC (TA3) present: 254
+    00000002 [] ifdhandler.c:1078:IFDHSetProtocolParameters() Timeout: 2928 ms
+    00000003 [] commands.c:2324:SetParameters() length: 7 bytes
+    00000006 [] -> 000000 61 07 00 00 00 00 4B 01 00 00 95 10 FF 46 00 FE 00
+    02267435 [] <- 000000 82 00 00 00 00 00 4B 41 FE 00
+    00000023 [] commands.c:2351:SetParameters Card absent or mute
+    
+    The idea is to reset the card and do NOT try to use lower the speed.
+
+ src/ifdhandler.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+commit 5fb1e2c3d4b1ee40dd5c370cbb5fe8c1f7de8851
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 25 14:41:11 2023 +0100
+
+    Alcor Micro AU9560: check the list exists before truncation
+    
+    The reader may be in a incorrect state and not respond to the
+    GET_DATA_RATES command. The list is then empty and we should not try to
+    truncate it (or the driver would crash).
+    
+    The logs are:
+    00000003 [] ccid_usb.c:1432:ControlUSB() request: 0x03
+    00000259 [] ccid_usb.c:1443:ControlUSB() control failed (1/3): LIBUSB_ERROR_IO
+    00000003 [] ccid_usb.c:1377:get_data_rates() IFD does not support GET_DATA_RATES request: -1
+    then crash
+
+ src/ccid.c | 25 +++++++++++++++----------
+ 1 file changed, 15 insertions(+), 10 deletions(-)
+
+commit 2f78bca94a4d815231638d1ff434b549f20913bf
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 20 16:15:17 2023 +0100
+
+    Add Sensyl SSC-HV Reader
+
+ readers/Sensyl_SSC-HV_Reader.txt | 100 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt    |   3 +-
+ 2 files changed, 102 insertions(+), 1 deletion(-)
+
+commit 98fb549ba17954f0623cb7a0e737e52d78f6149b
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 20 12:37:42 2023 +0100
+
+    Makefile: fix 'make dist'
+    
+    make[2]: *** No rule to make target 'SCARDGETATTRIB.txt', needed by 'distdir-am'.  Stop.
+
+ Makefile.am | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+commit 772f64885ecc421b5002dbed6d897d5471a9e3c9
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 20 10:55:39 2023 +0100
+
+    Rename SCARDGETATTRIB from .txt to .md
+
+ SCARDGETATTRIB.txt => SCARDGETATTRIB.md | 86 +++++++++++++++++++--------------
+ 1 file changed, 49 insertions(+), 37 deletions(-)
+
+commit 23948c5b7ff038c2a84a570274b50486eed5d43f
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 20 10:37:35 2023 +0100
+
+    Convert SCARDCONTOL from .txt to .md
+
+ SCARDCONTOL.md  | 68 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ SCARDCONTOL.txt | 63 ----------------------------------------------------
+ 2 files changed, 68 insertions(+), 63 deletions(-)
+
+commit 62a62d3fcc10beb639de0c96258c36225e560754
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Dec 7 11:31:07 2022 +0100
+
+    ccid_open_hack_pre: fix build error on macOS
+    
+    clang compiler does not like to have variables declared in a case: block
+    without a { } block.
+    
+    ccid.c:107:4: error: expected expression
+                            unsigned int *uint_array = ccid_descriptor->arrayOfSupportedDataRates;
+                            ^
+    ccid.c:112:12: error: use of undeclared identifier 'uint_array'
+                            after = uint_array;
+                                    ^
+    ccid.c:113:29: error: use of undeclared identifier 'uint_array'
+                            while ((current_speed = *uint_array++) != 0)
+                                                     ^
+    3 errors generated.
+
+ src/ccid.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+commit 3f42960bcd71a1053a6e330ccf33de617895e62e
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Nov 23 15:29:36 2022 +0100
+
+    IFDHSetProtocolParameters: add logs to speed selection
+    
+    We now log:
+    - the baud rate the card can use
+    - the maxiumum baud rate the reader can use
+    
+    So it you use a card with TA1=0x96 (250000 bits/s at 4 MHz) and the
+    reader can't use this speed you will have something like:
+    ifdhandler.c:858:IFDHSetProtocolParameters() Card can work at 231250 bauds
+    ifdhandler.c:897:IFDHSetProtocolParameters() Reader can't do more than 187500 bauds
+    ifdhandler.c:2160:find_baud_rate() Card baud rate: 115625
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 1807
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 1989
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 2409
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 2487
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 3315
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 3613
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 3978
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 4818
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 4973
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 6631
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 7227
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 7957
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 9635
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 9946
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 13262
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 14453
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 15914
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 19271
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 19892
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 21680
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 23871
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 26523
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 28906
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 29839
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 31828
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 36133
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 38542
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 39785
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 43359
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 48177
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 49731
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 53047
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 57813
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 59677
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 63656
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 66308
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 72266
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 77083
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 79570
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 86719
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 96354
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 99462
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 106093
+    ifdhandler.c:2169:find_baud_rate() Reader can do: 115625
+    ifdhandler.c:926:IFDHSetProtocolParameters() Set adapted speed to 115625 bauds
+    
+    This is the case with the "NXP JCOP 4, J3R200P0X3U/0ZA16CP NXD6.2
+    (JavaCard)" card
+    https://smartcard-atr.apdu.fr/parse?ATR=3BDC96FF8111FE8031C8544356350773FFA1C03C
+    and the Alcor Micro AU9560 reader.
+
+ src/ifdhandler.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+commit c81c512ba7159ad35a41deaf4d294ee4cc399920
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 22 17:56:47 2022 +0100
+
+    Alcor Micro AU9560: Remove high speeds
+    
+    The reader does NOT support high speeds even if it declares so.
+    
+    We remove all baud rates higher than 200000.
+    
+    00000026 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 1807 bps
+    00000005 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 1989 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 2409 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 2487 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 3315 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 3613 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 3978 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 4818 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 4973 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 6631 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 7227 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 7957 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 9635 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 9946 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 13262 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 14453 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 15914 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 19271 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 19892 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 21680 bps
+    00000007 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 23871 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 26523 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 28906 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 29839 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 31828 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 36133 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 38542 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 39785 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 43359 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 48177 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 49731 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 53047 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 57813 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 59677 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 63656 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 66308 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 72266 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 77083 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 79570 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 86719 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 96354 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 99462 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 106093 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 115625 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 119355 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 132616 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 144531 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 154167 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 159140 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 198925 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 212186 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 231250 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 318280 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 2344 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 2581 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 3125 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 3226 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 4301 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 4688 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 5161 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 5859 bps
+    00000007 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 6250 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 6452 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 7813 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 8065 bps
+    00000009 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 8602 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 9375 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 10323 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 10753 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 11719 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 12500 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 12903 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 15625 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 16129 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 17204 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 18750 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 20645 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 21505 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 23438 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 25000 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 25806 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 28125 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 30968 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 31250 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 32258 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 34409 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 37500 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 38710 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 41290 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 43011 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 46875 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 50000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 51613 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 56250 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 62500 bps
+    00000005 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 64516 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 68817 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 70313 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 75000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 77419 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 82581 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 86022 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 93750 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 96774 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 100000 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 103226 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 112500 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 117188 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 125000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 127312 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 129032 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 137634 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 150000 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 156250 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 161290 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 165161 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 172043 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 187500 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 200000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 206452 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 215054 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 250000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 258065 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 275269 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 300000 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 308333 bps
+    00000005 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 344086 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 375000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 400000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 412903 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 424373 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 462500 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 500000 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 516129 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 550538 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 600000 bps
+    00000003 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 636559 bps
+    00000002 [140214768158720] ccid_usb.c:1412:get_data_rates() declared: 688172 bps
+    00001534 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 212186
+    00000015 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 231250
+    00000004 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 318280
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 206452
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 215054
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 250000
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 258065
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 275269
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 300000
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 308333
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 344086
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 375000
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 400000
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 412903
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 424373
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 462500
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 500000
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 516129
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 550538
+    00000005 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 600000
+    00000003 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 636559
+    00000002 [140214768158720] ccid.c:117:ccid_open_hack_pre() Remove baudrate: 688172
+    
+    Cards with TA1=0x96 or 0x97 are now working with this reader after
+    negotiating a lower speed.
+
+ src/ccid.c | 24 ++++++++++++++++++++++++
+ src/ccid.h |  1 +
+ 2 files changed, 25 insertions(+)
+
+commit 1af59ba4d1b4b4557085f3e7938b0275282e66c8
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 18 14:34:56 2023 +0100
+
+    Add KAPELSE KAP-LINK
+
+ readers/KAPELSE_KAP-LINK.txt  | 102 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |   5 ++-
+ 2 files changed, 106 insertions(+), 1 deletion(-)
+
+commit 171ba932c94473ec699a0f2279cdb1bcef949caa
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 13 21:54:50 2023 +0100
+
+    configure.ac: disable the use of --disable-usbdropdir
+    
+    The configure will now fails with the error:
+    use --enable-usbdropdir=DIR
+    
+    It is not possible to build the driver without specifying a USB dropdir.
+
+ configure.ac | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 6ba85f0626cb00af18be7fd17ff1c0144d373405 (origin/master, origin/HEAD, github/master)
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Dec 6 17:22:14 2022 +0100
+
+    Add LDU LANDI
+
+ readers/LDU_LANDI.txt         | 51 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  5 ++++-
+ 2 files changed, 55 insertions(+), 1 deletion(-)
+
+commit 2b568a65c887b5416c3d3a7ed7d44407ba7d8e91
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Nov 18 11:09:21 2022 +0100
+
+    Add TOKEN2 MFA NFC Reader
+
+ readers/TOKEN2_MFA_NFC_Reader.txt | 100 ++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt     |   5 +-
+ 2 files changed, 104 insertions(+), 1 deletion(-)
+
+commit cd1df07d90487c77f07ecebf098ee64f85b64873
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Nov 17 21:52:35 2022 +0100
+
+    Add Thales RF Reader
+
+ readers/Thales_RF_Reader.txt  | 57 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  3 ++-
+ 2 files changed, 59 insertions(+), 1 deletion(-)
+
+commit 7ddec0a46fe7592a06b1ed22b4afdcc8e301465e
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Nov 16 14:52:48 2022 +0100
+
+    Add TOKEN2 Molto2
+
+ readers/TOKEN2_Molto2.txt     | 50 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  5 ++++-
+ 2 files changed, 54 insertions(+), 1 deletion(-)
+
+commit 64a1780ac6b9947223a7d65c363556f2aed8d4c9 (tag: 1.5.1)
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Nov 14 11:41:23 2022 +0100
+
+    Release 1.5.1
+    
+    Signed-off-by: Ludovic Rousseau <ludovic.rousseau@free.fr>
+
+ README.md    | 28 ++++++++++++++++++++++++++++
+ configure.ac |  2 +-
+ 2 files changed, 29 insertions(+), 1 deletion(-)
+
+commit 67b825199a6d3510168b49d90e16265cdaead00d
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 8 18:13:48 2022 +0100
+
+    bootstrap: use /bin/sh instead of bash
+    
+    Some systems (like FreeBSD) do not provide bash in /bin/bash but in
+    /usr/local/bin/bash
+    We use /bin/sh instead.
+
+ bootstrap | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 7baef9d32ae22f6218a68d9e8570dc02fac60c80
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 8 17:26:02 2022 +0100
+
+    Update PCSC submodule
+
+ PCSC | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 6de1839a98fa53b99328d449381718483d13d6ed
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 8 17:25:38 2022 +0100
+
+    Update PCSC-contrib submodule
+
+ PCSC-contrib | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit b1abafd6206e84ef06df68fea9139f56f3a54e67
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 8 15:39:08 2022 +0100
+
+    Fix compiler warning
+    
+    ../../../examples/scardcontrol.c: In function ‘main’:
+    ../../../examples/scardcontrol.c:219:16: warning: ‘__builtin___sprintf_chk’ may write a terminating nul past the end of the destination [-Wformat-overflow=]
+      219 | #define FORMAT "Error on data byte %2d"
+          |                ^~~~~~~~~~~~~~~~~~~~~~~~
+    ../../../examples/scardcontrol.c:221:17: note: in expansion of macro ‘FORMAT’
+      221 |   sprintf(ret2, FORMAT, (char)bRecvBuffer[1]);
+          |                 ^~~~~~
+    ../../../examples/scardcontrol.c:219:39: note: format string is defined here
+      219 | #define FORMAT "Error on data byte %2d"
+          |                                       ^
+    In file included from /usr/include/stdio.h:867,
+                     from ../../../examples/scardcontrol.c:20:
+    /usr/include/x86_64-linux-gnu/bits/stdio2.h:36:10: note: ‘__builtin___sprintf_chk’ output between 22 and 24 bytes into a destination of size 23
+       36 |   return __builtin___sprintf_chk (__s, __USE_FORTIFY_LEVEL - 1,
+          |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+       37 |       __bos (__s), __fmt, __va_arg_pack ());
+          |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ examples/scardcontrol.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 209f459de46952e3387e47b9758c4d77cddd1caf
+Author: Nathan Barrett-Morrison <nathan.morrison@timesys.com>
+Date:   Mon Nov 7 15:03:43 2022 -0500
+
+    Adjust USB drivers path at run-time via environment variable
+    
+    Add in the ability to dynamically adjust module path at run-time via
+    system environmental exports
+    
+    Background: While trying to integrate PKCS11+HSM into a build system
+    (Yocto Project), we wanted the build system to be able to use the HSM
+    directly. However, The Yocto Project creates a sandboxed environment for
+    each package which uses CCID during compilation. This means that the
+    CCID modules cannot be found from within these sandboxed directories, as
+    their paths are non-determinable at compile time. OpenSSL appears to use
+    OPENSSL_CONF for this sort of dynamic configuration, so I've followed
+    their lead and incorporated a similar SYS_GetEnv() method.
+    
+    https://github.com/LudovicRousseau/CCID/pull/103
+
+ src/Makefile.am  | 4 +++-
+ src/ccid_usb.c   | 9 ++++++++-
+ src/ifdhandler.c | 9 ++++++++-
+ 3 files changed, 19 insertions(+), 3 deletions(-)
+
+commit 2e618874e3799d6fa911db9a3009f9bcda5a2be7
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 8 15:30:41 2022 +0100
+
+    Add SYS_GetEnv() implementation
+    
+    It is included in sys_unix.c from PCSC submodule.
+
+ src/sys_generic.h | 1 +
+ src/sys_unix.c    | 1 +
+ 2 files changed, 2 insertions(+)
+
+commit 07c47bfe6c31fa6ce746a06737cccec00195e49e
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 8 15:29:48 2022 +0100
+
+    Update PCSC submodule
+    
+    We need the version with SYS_GetEnv() function included.
+
+ PCSC | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 89bddc85d819df57ff1e0cf7e28c92ae08708fb5
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Nov 7 17:28:57 2022 +0100
+
+    Update to PCSC 1.9.9
+
+ PCSC | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 474c611fb323f86bcbb3cad48ed767c5e47f8207
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Nov 7 17:15:36 2022 +0100
+
+    github actions: also test --enable-zlp
+
+ .github/workflows/build.yml | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit 22257785f931804988f6c82fbf8db9150168f805
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Nov 7 16:19:36 2022 +0100
+
+    Use bool, true & false from C99 stdbool.h
+    
+    Modernize the source code to use "recent" version of the C language.
+    See https://en.wikipedia.org/wiki/C_data_types#stdbool.h
+
+ examples/scardcontrol.c | 16 ++++++----------
+ src/ccid.c              |  4 ++--
+ src/ccid.h              |  4 +++-
+ src/ccid_serial.c       | 20 ++++++++++----------
+ src/ccid_usb.c          | 40 ++++++++++++++++++++--------------------
+ src/commands.c          |  5 +++--
+ src/commands.h          |  2 +-
+ src/debug.h             |  6 +++---
+ src/ifdhandler.c        | 24 ++++++++++++------------
+ src/openct/proto-t1.c   | 16 ++++++----------
+ src/openct/proto-t1.h   |  3 ++-
+ src/parse.c             | 30 +++++++++++++-----------------
+ src/towitoko/atr.c      | 19 ++++++++++---------
+ src/towitoko/atr.h      |  2 +-
+ src/towitoko/defines.h  | 12 ------------
+ src/towitoko/pps.c      | 13 +++++++------
+ src/utils.h             |  5 -----
+ 17 files changed, 99 insertions(+), 122 deletions(-)
+
+commit c6a21e6743e38fa4c0eef193fcafd96a45a7214d
+Author: Ingo Fankner <ingo.fankner@rohde-schwarz.com>
+Date:   Fri Oct 21 08:25:32 2022 +0200
+
+    Remove dead code
+
+ src/commands.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+commit 0a7c0f187b3ac4ff358ffc7d0ac4ce2751566af1
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Nov 2 18:53:47 2022 +0100
+
+    Use "Fix" instead of "Correct" in log messages
+    
+    The message is now:
+    "Fix bEntryValidationCondition (was 0x%02X)"
+    instead of:
+    "Correct bEntryValidationCondition (was 0x%02X)"
+    
+    The verb "to fix" is more correct :-)
+
+ src/commands.c | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+commit 3c65e22b0221f4040dcac4da48f284aad3b0012b
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Oct 27 18:34:26 2022 +0200
+
+    Add Dexon Tecnologias Digitais LTDA DXToken
+
+ readers/Dexon_Tecnologias_Digitais_DXToken.txt | 53 ++++++++++++++++++++++++++
+ readers/supported_readers.txt                  |  5 ++-
+ 2 files changed, 57 insertions(+), 1 deletion(-)
+
+commit a784823b6f4c275231d4f29de75cfe6dce29d29b
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Oct 14 12:31:16 2022 +0200
+
+    Add ESMART Reader ER433x ICC
+
+ readers/ESMART_Reader_ER433x_ICC.txt | 54 ++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt        |  3 +-
+ 2 files changed, 56 insertions(+), 1 deletion(-)
+
+commit b5b33a41a42c863bc6ea6330d786c3ba38c04fb9
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Sep 30 10:04:21 2022 +0200
+
+    examples/scardcontrol.c: parse wLcdLayout & bEntryValidationCondition
+    
+    Display the values wLcdLayout & bEntryValidationCondition in a human
+    readable format.
+
+ examples/scardcontrol.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+commit 990834118835c0283b496f201f2070fd648cdd39
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Sep 28 22:04:29 2022 +0200
+
+    Fix compiler warning when --enable-embedded is used
+    
+    ccid.c: In function ‘ccid_error’:
+    ccid.c:601:21: error: unused parameter ‘log_level’ [-Werror=unused-parameter]
+      601 | void ccid_error(int log_level, int error, const char *file, int line,
+          |                 ~~~~^~~~~~~~~
+    ccid.c:601:36: error: unused parameter ‘error’ [-Werror=unused-parameter]
+      601 | void ccid_error(int log_level, int error, const char *file, int line,
+          |                                ~~~~^~~~~
+    ccid.c:601:55: error: unused parameter ‘file’ [-Werror=unused-parameter]
+      601 | void ccid_error(int log_level, int error, const char *file, int line,
+          |                                           ~~~~~~~~~~~~^~~~
+    ccid.c:601:65: error: unused parameter ‘line’ [-Werror=unused-parameter]
+      601 | void ccid_error(int log_level, int error, const char *file, int line,
+          |                                                             ~~~~^~~~
+    ccid.c:602:21: error: unused parameter ‘function’ [-Werror=unused-parameter]
+      602 |         const char *function)
+          |         ~~~~~~~~~~~~^~~~~~~~
+
+ src/ccid.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+commit 0b243997252de5833c92dd8491223c2a7f18704c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Sep 28 22:00:38 2022 +0200
+
+    Fix compiler warning when --enable-embedded is used
+    
+    commands.c: In function ‘T0ProcSW1’:
+    commands.c:2025:28: error: variable ‘sw2’ set but not used [-Werror=unused-but-set-variable]
+     2025 |         unsigned char sw1, sw2;
+          |                            ^~~
+    commands.c:2025:23: error: variable ‘sw1’ set but not used [-Werror=unused-but-set-variable]
+     2025 |         unsigned char sw1, sw2;
+          |                       ^~~
+
+ src/commands.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+commit ef7c47b7263cce4bfa23fa4654ad735085f3e3bf
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Sep 16 13:16:38 2022 +0200
+
+    Add Access IS ATR220 with idProduct: 0x0184
+    
+    This reader have 4 SAM interfaces compared to idProduct: 0x0180
+
+ readers/Access_IS_ATR220_0x0184.txt | 277 ++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt       |   3 +-
+ 2 files changed, 279 insertions(+), 1 deletion(-)
+
+commit 040b7bf7415330102128e9e1fb86674e6ad07667
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Aug 25 23:23:46 2022 +0200
+
+    Use LOG_SENSIBLE_STRING for buffers
+    
+    CCID frames may contain secrets so should not be visible by default.
+    
+    It is still possible to update the source code, rebuild a custom CCID
+    driver and use it to log CCID frames.
+
+ src/debug.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 825dcb9d46ea838267b9dcf0c281c2ad12438864
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Aug 25 23:22:10 2022 +0200
+
+    Use LOG_STRING to format non-sensitive log strings
+    
+    Non-sensitive strings (reader names, actions, etc.) are now logged using
+    "%{public}s" and are then available in "com.apple.ifdbundle" logs.
+
+ src/ccid_usb.c   |  8 ++++----
+ src/debug.c      |  2 +-
+ src/ifdhandler.c | 26 +++++++++++++-------------
+ 3 files changed, 18 insertions(+), 18 deletions(-)
+
+commit dbaae30d581e81d6f545158df66447d3252988e1
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Aug 25 23:06:43 2022 +0200
+
+    Define LOG_STRING as "%{public}s"
+    
+    By default, on macOS, strings are logged as "<private>" unless you use
+    an explicit "%{public}s" format.
+    
+    Non-sensitive strings (reader names, actions, etc.) are now logged using
+    "%{public}s".
+    
+    Only buffers (CCID frames) are still logged using "%s" and will then be
+    replaced by "<sensitive>" in "com.apple.ifdbundle" logs.
+    
+    You can use log_macOS_ifdbundle.sh from PCSC-contrib to see logs.
+
+ src/debug.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+commit bbca3c088728d44760db13227e30af258660701d
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Aug 25 22:57:18 2022 +0200
+
+    Fix Alcor Link AK9567 & AK9572 on macOS (part 2)
+    
+    These 2 readers have 2 interfaces se we need to set max_interface_number to the correct value.
+
+ src/ccid_usb.c | 80 ++++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 41 insertions(+), 39 deletions(-)
+
+commit e2a6a1b638ef82803a178993556d9e1fe1297e34
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Aug 25 22:36:45 2022 +0200
+
+    .gitignore: ignore some other files
+
+ .gitignore | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+commit bee6e69a57aa0b51e97c3992698bb39b40ec9449
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Aug 24 14:06:40 2022 +0200
+
+    Add SafeNet eToken Fusion
+
+ readers/SafeNet_eToken_Fusion.txt | 51 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt     |  3 ++-
+ 2 files changed, 53 insertions(+), 1 deletion(-)
+
+commit 7b4e251e2ff46b8044637b3011de327ed1f42b3c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Aug 24 12:01:30 2022 +0200
+
+    Fix Alcor Link AK9567 & AK9572 on macOS
+    
+    On macOS multi-interfaces readers must be simulated as composite
+    readers.
+
+ src/ccid.h       | 2 ++
+ src/ccid_usb.c   | 4 ++++
+ src/ifdhandler.c | 2 ++
+ 3 files changed, 8 insertions(+)
+
+commit 6f20d6d7bd44d3e71f1e4db8544b0e0bda688d05
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Aug 23 22:38:00 2022 +0200
+
+    Add CREATOR CRT-603(CZ1) CCR
+
+ readers/CREATOR_CRT-603_CZ1_CCR.txt | 111 ++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt       |   5 +-
+ 2 files changed, 115 insertions(+), 1 deletion(-)
+
+commit 3e83b49068ac7ecffecef34b5d840334e5ae889c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Aug 11 11:06:07 2022 +0200
+
+    Add ESMART Reader ER773x Dual & 1S
+
+ readers/ESMART_Reader_ER773x_Dual_1S.txt | 54 ++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt            |  3 +-
+ 2 files changed, 56 insertions(+), 1 deletion(-)
+
+commit c7d4572320219bbe3669cc09810e8da144f76438
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Aug 5 13:16:20 2022 +0200
+
+    Change name "Flight" into "Flight system consulting"
+    
+    On customer request
+
+ readers/supported_readers.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+commit 60544c00d9a41399d96b5176382b29d4a3653f63
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Aug 5 11:43:49 2022 +0200
+
+    Add Flight Incredist
+
+ readers/Flight_Incredist.txt  | 115 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |   5 +-
+ 2 files changed, 119 insertions(+), 1 deletion(-)
+
+commit ca75b93ba81edcc638b74a5fd07574d90f836e07
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jul 29 17:39:55 2022 +0200
+
+    Add Ledger Nano S Plus
+    
+    With CCID interface
+    https://salsa.debian.org/rousseau/CCID/-/merge_requests/8
+
+ readers/Ledger_Nano_S_Plus_CCID.txt | 53 +++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt       |  1 +
+ 2 files changed, 54 insertions(+)
+
+commit 3f61c464fe4b1c883ce2f8a9afea0954ce3ce1b9
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jul 29 17:38:10 2022 +0200
+
+    Add Ledger Nano X
+    
+    With CCID interface
+    https://salsa.debian.org/rousseau/CCID/-/merge_requests/8
+
+ readers/Ledger_Nano_X_CCID.txt | 53 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt  |  1 +
+ 2 files changed, 54 insertions(+)
+
+commit 530ccf74a59e5f71c576028175123cb8908b8a0d
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jul 29 17:34:08 2022 +0200
+
+    Add Ledger Nano S
+    
+    With CCID interface
+    https://salsa.debian.org/rousseau/CCID/-/merge_requests/8
+
+ readers/Ledger_Nano_S_CCID.txt | 53 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt  |  3 ++-
+ 2 files changed, 55 insertions(+), 1 deletion(-)
+
+commit 16b970eb723e0b3ed91f4f483f6b0c1769e8eea7
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jul 20 17:54:04 2022 +0200
+
+    Add Sensyl SSC-NFC Reader
+
+ readers/Sensyl_SSC-NFC_Reader.txt | 54 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt     |  5 +++-
+ 2 files changed, 58 insertions(+), 1 deletion(-)
+
+commit 1577b4dcd7bfce0e101a5f016839d6e0497d6bed
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Jun 21 17:56:26 2022 +0200
+
+    Add CHERRY SmartTerminal ST-1144
+    
+    It has the same VID:PID as the Cherry SmartTerminal XX44
+
+ readers/Cherry_SmartTerminal_1144.txt | 160 ++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt         |   7 +-
+ 2 files changed, 166 insertions(+), 1 deletion(-)
+
+commit 4b870d825346bf59085fca0c8b1306bae72e94d1
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Jun 20 17:31:58 2022 +0200
+
+    Add Alcor Link AK9572
+
+ readers/Alcor_Link_AK9572.txt | 312 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |   1 +
+ 2 files changed, 313 insertions(+)
+
+commit 8d5242653fb5100ee783cdfc6660f640348ab878
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Jun 20 17:29:43 2022 +0200
+
+    Add Alcor Link AK9567
+
+ readers/Alcor_Link_AK9567.txt | 312 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |   3 +-
+ 2 files changed, 314 insertions(+), 1 deletion(-)
+
+commit c51fc7b43aea251e71e3168b5ca678e54fc77c8e
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri May 20 17:55:11 2022 +0200
+
+    Add BLUTRONICS TAURUS NFC
+
+ readers/BLUTRONICS_TAURUS_NFC.txt | 57 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt     |  3 ++-
+ 2 files changed, 59 insertions(+), 1 deletion(-)
+
+commit 4c75460a6a1831ca43bd968205755aa700a51fcf (debug/master)
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri May 13 13:46:12 2022 +0200
+
+    github actions: test build configurations
+
+ .github/workflows/build.yml | 59 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 59 insertions(+)
+
+commit 8512f6a57352e77ee29a46b98fa72bd71065c8ae
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri May 13 13:49:40 2022 +0200
+
+    configure.ac: add --enable-strict option
+    
+    Warnings will not stop the compilation, by default.
+
+ configure.ac | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+commit 8dab2f5f14c1e6bb5b4f390b4a117bfdd656b070
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri May 13 13:34:55 2022 +0200
+
+    Use pcsc-lite 1.9.7
+
+ PCSC | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 38bc1d42d977185986e684c7a631514bc10f0d3a
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Apr 30 14:04:14 2022 +0200
+
+    Add Ledger Nano SP
+
+ readers/Ledger_Nano_SP.txt    | 55 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  3 ++-
+ 2 files changed, 57 insertions(+), 1 deletion(-)
+
+commit 0b3347371bed66e0ccd767f76aafa0f55f4e0f94
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Apr 3 14:21:29 2022 +0200
+
+    IFDHSetProtocolParameters: get convention before using it
+    
+    In case the reader defines CCID_CLASS_AUTO_PPS_PROP i.e. 25% or readers
+    according to https://ccid.apdu.fr/select_readers/?dwFeatures=6 AND the
+    card ATR declares ATR_CONVENTION_INVERSE i.e. 6% of cards according to
+    https://ludovicrousseau.blogspot.com/2016/02/atr-statistics-ts-initial-character.html
+    then the parameters settings were wrong.
+    
+    Thanks to Coverity for the bug report:
+    CID 1503362 (#2 of 2): Uninitialized scalar variable (UNINIT)15.
+    uninit_use: Using uninitialized value convention.
+
+ src/ifdhandler.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+commit 7bca22e6bb84fe475708957149b7b5075cd2329d
+Author: Ray Veldkamp <ray.veldkamp@canonical.com>
+Date:   Tue Feb 22 14:36:34 2022 +1100
+
+    Fix debug logging of lang in ccid.c
+    
+    Minor fix to ensure that logging of the system LANG variable is done
+    after it is checked for NULL.
+
+ src/ccid.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 42e108595ee5cc0e0e422c5fccb788c41b2f0985
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Feb 2 11:54:27 2022 +0100
+
+    Regenerate supported_readers.txt
+    
+    New list to reflect the change in the previous commit: "Feitian" is
+    preferred to "Avtor" for rebranded readers
+
+ readers/supported_readers.txt | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+commit 07aefeb8fd2f40eb5e8c7d9fd737c0a917a22721
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Feb 2 11:48:14 2022 +0100
+
+    "Feitian" is preferred to "Avtor" for rebranded readers
+    
+    2 Avtor readers are in fact Feitian readers rebranded. They are:
+    0x096E:0x0608:Avtor SC Reader KP382
+    0x096E:0x0624:Avtor KP-375BLE
+    They are also known as:
+    0x096E:0x0608:Feitian 502-CL
+    0x096E:0x0624:Feitian bR301
+    
+    I change the iManufacturer from "Avtor" to "~Avtor" so that they appear
+    after "Feitian" in the lexicographic order.
+    
+    Thanks to Martin Paljak for the bug report.
+    
+    Closes: https://github.com/LudovicRousseau/CCID/issues/94
+    "Mixup of readers / add some "sanity check" for readers.txt?"
+
+ readers/Avtor_KP-375BLE.txt       | 2 +-
+ readers/Avtor_SC_Reader_KP382.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+commit b2927edae089987a37c6fbdd6291c316c02c4500
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 28 16:19:55 2022 +0100
+
+    scardcontrol: update Copyright date
+
+ examples/scardcontrol.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 866956de70174319d0deb88c039458e8e4253863
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 28 16:15:06 2022 +0100
+
+    scardcontrol: reformat output
+
+ examples/scardcontrol.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+commit 3b924f76b34c788c1d3efd9702e8f9fa433d50f5
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 28 16:02:16 2022 +0100
+
+    scardcontrol: check WinSCard error early
+    
+    Check the SCardTransmit() or SCardControl() functions are successful
+    _before_ printing the card response.
+    
+    This avoids a bad printing if the card answer size is not set to 0.
+    For example on macOS you can get:
+    verify PIN dump: 00 40 00 00 FF
+     card response: 64 00 AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA
+    SCardTransmit: Card was removed. (0x80100069)
+    
+    The bRecvBuffer buffer contain "random bytes" since the card was removed.
+
+ examples/scardcontrol.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+commit d33bf8f0b54e8b9df33533c97fe31ea72356ef08
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 28 15:49:55 2022 +0100
+
+    scardcontrol: add support of 6A xx error codes
+    
+    6A xx error codes are specific to my test JavaCard applet.
+    The SW2 contains the index of the first byte in error compared to a PIN
+    of value "12345678".
+    
+    We now have an output like:
+     Secure verify PIN
+     command: 00 00 82 08 00 0C 04 02 01 09 04 00 00 00 00 0D 00 00 00 00 20 00 00 08 30 30 30 30 00 00 00 00
+    Enter your PIN:
+     card response [2 bytes]: 6A 03: Error on data byte  3
+    SCardControl: OK
+    
+    verify PIN dump: 00 40 00 00 FF
+     card response: 00 20 00 00 08 31 32 33 30 30 30 30 30 90 00
+    SCardTransmit: OK
+    
+     error at ------------------------------^^
+
+ examples/scardcontrol.c | 42 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+commit f79106c365ed0747109e7e465adb54bf176b1036 (tag: 1.5.0)
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Jan 27 11:24:13 2022 +0100
+
+    Release 1.5.0
+    
+    Signed-off-by: Ludovic Rousseau <ludovic.rousseau@free.fr>
+
+ README.md    | 26 ++++++++++++++++++++++++++
+ configure.ac |  2 +-
+ 2 files changed, 27 insertions(+), 1 deletion(-)
+
+commit 401f9fba36be17592188713f29559c1bf616bde4
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Jan 27 12:50:23 2022 +0100
+
+    ReadUSB: Fix compiler warning
+    
+    ccid_usb.c: In function ‘ReadUSB’:
+    ccid_usb.c:967:61: warning: comparison of integer expressions of different signedness: ‘int’ and ‘unsigned int’ [-Wsign-compare]
+      967 |                                 if (concurrent[slot].length > *length)
+
+ src/ccid_usb.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 9c59fc5557c5ac515f87f877fb5a337166b33343
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Jan 27 11:10:22 2022 +0100
+
+    Add Thales Shield M4 Reader
+
+ readers/Thales_Shield_M4_Reader.txt | 56 +++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt       |  5 +++-
+ 2 files changed, 60 insertions(+), 1 deletion(-)
+
+commit a725a113ee050a5b0e336dca44bbff035786ee16
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 21 11:12:05 2022 +0100
+
+    Multi_ReadProc() exits on the *last* slot exit
+    
+    The function to read data from multi-slots readers should exit only when
+    the last slot is terminated.
+    
+    Before the change, the function was terminated with the _first_ slot. So
+    it was not possible to send PowerDown commands to the other slots of the
+    same reader.
+
+ src/ccid_usb.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+commit 5583333cdb6f30684c8eb569761516ed49c61ec3
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 15:17:46 2022 +0100
+
+    Prevent a potential buffer overflow for concurrent multi-slots
+    
+    Check the buffer is large enough to copy all the received bytes.
+    The problem should never happen in practice but...
+
+ src/ccid_usb.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+commit 1addd756eeb182764fc55a95a9fe1a8af35da805
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Nov 6 14:12:19 2021 +0100
+
+    Check the bSeq value when receiving a CCID frame
+    
+    For multi-slots readers we now use a different USB read routine.
+    We can now get USB packets that were waiting in the reader but not yet
+    sent. For example this happens when pcscd is stopped and restarted.
+    On restart the driver will receive packets that were not yet read during
+    the previous execution of pcscd.
+    
+    We must ignore packets with a bSeq that does not correspond to the bSeq
+    of the command sent by the reader.
+
+ src/ccid_serial.c |  5 ++++-
+ src/ccid_serial.h |  2 +-
+ src/ccid_usb.c    |  8 ++++----
+ src/ccid_usb.h    |  2 +-
+ src/commands.c    | 32 +++++++++++++++++++++-----------
+ 5 files changed, 31 insertions(+), 18 deletions(-)
+
+commit 77376bcefff4831894033f6e06ee95764afa02bd
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 31 14:49:43 2021 +0100
+
+    Multi_ReadProc: wait for 100 ms in case of libusb error
+    
+    We wait a bit to avoid a fast error loop.
+    If libusb_bulk_transfer() failed because the device has been removed
+    then the device will stay removed and we may fill the logs with error
+    messages untill the removal is detected and reported by pcscd hotplug
+    mechanism.
+    
+    The only case in which we do NOT wait is LIBUSB_ERROR_TIMEOUT because
+    this case is expected and we should wait again immediatly.
+
+ src/ccid_usb.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+commit 298903c8f85cb0e79aeddd6cc7ff50d2829397db
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Oct 27 18:33:40 2021 +0200
+
+    Enable TAG_IFD_SLOT_THREAD_SAFE when supported
+    
+    We only support the case of readers that can support access to all slots
+    at the same time. That is the case of the sysmoOCTSIM for example.
+    
+    But if the reader can only support a subset of the slot at the same time
+    we continue as before. That is the case of the COVADIS Auriga that
+    declares 3 slots but can only have 2 slots active at the same time.
+
+ src/ifdhandler.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+commit 47fd21e31bec8e068910dfb03f6123cc9d3faacf
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Jan 23 10:32:04 2022 +0100
+
+    Add suport of simultaneous slot access
+    
+    This is used for multi slots readers like the sysmoOCTSIM reader with 8
+    slots.
+
+ src/ccid_usb.c | 213 +++++++++++++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 199 insertions(+), 14 deletions(-)
+
+commit 1fa58ab0363455523739c04146c96c84f33a029f
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Oct 27 15:52:42 2021 +0200
+
+    Store CCID field bMaxCCIDBusySlots
+    
+    We will need this value to know the number of slots that can be used
+    simultanesously.
+
+ src/ccid.h        | 5 +++++
+ src/ccid_serial.c | 1 +
+ src/ccid_usb.c    | 1 +
+ 3 files changed, 7 insertions(+)
+
+commit d1cf6bdc73bfe056487432fcd949a7ab8b1e57a7
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Jan 22 17:32:47 2022 +0100
+
+    Multi_PollingProc: do not set .terminated here
+    
+    The field .terminated is set to TRUE in Multi_PollingTerminate() to terminate
+    the thread.
+    
+    This line was present since the initial patch
+    38faa97872a526e069a856df710167fe4c50486a in 2013.
+
+ src/ccid_usb.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+commit 0ee9dd19a6258a05553c66ec536325cae04c3341
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Jan 22 14:33:16 2022 +0100
+
+    Multi_PollingProc: allocate the libusb transfer once
+    
+    No need to allocate/free the libusb transfer structure for each
+    transfer.
+    We do it once at the beginning of the function.
+
+ src/ccid_usb.c | 25 ++++++++++---------------
+ 1 file changed, 10 insertions(+), 15 deletions(-)
+
+commit a2daf37ee1eaa84fc10a78114372e4eb588ac7ab
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Fri Jan 21 10:58:48 2022 +0100
+
+    Multi_PollingProc: log the status name instead of its value
+    
+    Use libusb_error_name(status) to log a human readable text instead of a
+    numeric value.
+    We now have:
+    00000085 ccid_usb.c:1703:Multi_PollingProc() Multi_PollingProc (1/7): LIBUSB_TRANSFER_CANCELLED
+    instead of:
+    00000148 ccid_usb.c:1703:Multi_PollingProc() Multi_PollingProc (1/7): 3
+
+ src/ccid_usb.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+commit 5259925ceb74eca69b3aad7658df30d6fa938ed6
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Thu Jan 20 18:49:07 2022 +0100
+
+    IFDHSetProtocolParameters: always compute readTimeout
+    
+    If the reader declares CCID_CLASS_AUTO_PPS_PROP the driver does not send
+    the PC_to_RDR_SetParameters CCID command.
+    But we must compute the readTimeout to use according to the card ATR.
+    
+    The default read timeout of 3 seconds may not be a good value in every
+    cases.
+    
+    The problem was detected using the SpringCard Puck One reader that does
+    NOT send time extension requests.
+
+ src/ifdhandler.c | 27 +++++++++++++++++----------
+ 1 file changed, 17 insertions(+), 10 deletions(-)
+
+commit 560de95fa73f426286aeab9c7191dfacc472bbed
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Jan 16 21:40:02 2022 +0100
+
+    Remore unused field "transfer"
+    
+    The "struct usbDevice_MultiSlot_Extension" had a field
+    "struct libusb_transfer *transfer;" that was not used.
+
+ src/ccid_usb.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+commit 0e0141e05a3a1f05e116700e62a89d2c6c9e25b2
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 16:40:18 2022 +0100
+
+    Do not log the libusb error value, just its name
+    
+    There is no real value to duplicate the libusb error name by the error
+    value.
+    "-4 LIBUSB_ERROR_NO_DEVICE" is not more informative than just
+    "LIBUSB_ERROR_NO_DEVICE".
+
+ src/ccid_usb.c | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
+commit 43050f337edb9d38a35dec04ee5448c74b19c272
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 16:24:43 2022 +0100
+
+    Do not log LIBUSB_ERROR_NO_DEVICE when a multi slot is removed
+    
+    When a multi slot reader with simultaneous acces used is removed we get
+    the error log:
+    00000000 [140737321879104] ccid_usb.c:1734:Multi_PollingProc() Multi_PollingProc (1/18): error -4 LIBUSB_ERROR_NO_DEVICE
+    
+    Since this error is expected we do not log it.
+
+ src/ccid_usb.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+commit 75f80160d71b0bbcb31b4b81a71e963ed0b35c09
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 13:43:17 2022 +0100
+
+    iInterruptRead: log libusb error text version
+    
+    Log the libusb error name instead of just the decimal code.
+    
+    In the logs we now have:
+    00000034 [139678897940032] ccid_usb.c:1526:InterruptRead() InterruptRead (1/7): LIBUSB_TRANSFER_CANCELLED
+    instead of :
+    00000034 [139678897940032] ccid_usb.c:1526:InterruptRead() InterruptRead (1/7): 3
+
+ src/ccid_usb.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+commit 100a4e910be1012f26fa771496bff5f9346f08f6
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 13:35:42 2022 +0100
+
+    Avoid potential data race for card events management
+    
+    Declare polling_transfer field as _Atomic since it is accessed from
+    different threads.
+    
+    The thread running InterruptRead() or Multi_PollingProc() has a
+    read/write access.
+    
+    The thread running InterruptStop() or Multi_PollingTerminate() also
+    access the field to cancel the transfer.
+
+ src/ccid_usb.c | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+commit a6edf774c0a9d2d63c0fd2c939888dcedb3d2904
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 10:02:25 2022 +0100
+
+    Avoid potential data race for multi-slots readers
+    
+    Declare "terminated" field as _Atomic since it is accessed from
+    different threads: one thread reads the value and the value is set from
+    another thread to indicate to the first thread to exit.
+    
+    I have NOT found an occurence of the bug in a real execution. But the
+    code should be safer now.
+
+ src/ccid_usb.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+commit 51d90a5e0f1d1d9abc420207b5543ea50707d6c1
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 19 15:09:25 2022 +0100
+
+    Rewrite DEBUG_*() macros
+    
+    Wrap the code in a "do { [...] } while(0)" so it is possible to use a
+    construct like:
+      if (condition)
+        DEBUG_CRITICAL("Error");
+      else
+        normal execution
+    
+    Before the change, the DEBUG_CRITICAL() was expanded to:
+      if (condition)
+        if (LogLevel & DEBUG_LEVEL_CRITICAL)
+          Log1(PCSC_LOG_CRITICAL, fmt)
+      else
+        normal execution
+    So the "else" was associated to the second "if" instead of the first
+    one.
+    And this is an open door for bugs.
+    
+    To avoid any problem the code should have been:
+      if (condition)
+      {
+        DEBUG_CRITICAL("Error");
+      }
+      else
+        normal execution
+    
+    DEBUG_*() maros are now safer to use.
+
+ src/debug.h | 61 +++++++++++++++++++++++++++----------------------------------
+ 1 file changed, 27 insertions(+), 34 deletions(-)
+
+commit a6ed3fa1bdb554f3a0e01e9d9fb261d88ab298b2
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Jan 15 13:36:55 2022 +0100
+
+    IFDHSetProtocolParameters: harmonize log message
+    
+    Use "Timeout:" for T=0 as for T=1 (line 1068) and when no computation
+    is done (line 816).
+
+ src/ifdhandler.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 2ffdb61caee2921b5f6d5b2309ea9993e1ca557c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:29:37 2022 +0100
+
+    Add Circle CIR615 CL
+
+ readers/Circle_CIR615_CL.txt  | 54 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit cf35f360ae11b1cfc4ed79de4d8a35beed7df144
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:28:24 2022 +0100
+
+    Add Circle CIR615 CL & 1S
+
+ readers/Circle_CIR615_CL_1S.txt | 54 +++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt   |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit c1f69339a3a5e9b214c809309f8a5c73e0cecf4d
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:24:48 2022 +0100
+
+    Add Circle CIR515 ICC
+
+ readers/Circle_CIR515_ICC.txt | 54 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit f9768e1d61955ac630b66d6b57a3f88d33d3c16a
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:23:29 2022 +0100
+
+    Add Circle CIR415 CL
+
+ readers/Circle_CIR415_CL.txt  | 54 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit e90ea431d2fd731408efe384b2ba6c20b42d6a87
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:21:59 2022 +0100
+
+    Add Circle CIR315 with idProduct: 0x7004
+
+ readers/Circle_CIR315_0x7004.txt | 105 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt    |   1 +
+ 2 files changed, 106 insertions(+)
+
+commit 8ecaacb0aae32d9d21d09f88c076a90f4759357f
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:20:49 2022 +0100
+
+    Add Circle CIR315 DI
+
+ readers/Circle_CIR315_DI.txt  | 54 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit 868abf1248b45469496b2c73e8ac380a607f9241
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:19:19 2022 +0100
+
+    Add Circle CIR315 with idProduct: 0x0324
+
+ readers/Circle_CIR315_0x0324.txt | 105 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt    |   1 +
+ 2 files changed, 106 insertions(+)
+
+commit 472d0964c94a1113100a753a9cdd0103f75be5e5
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 16:14:24 2022 +0100
+
+    Add Circle CIR215 CL with iProduct 0x2100
+
+ readers/Circle_CIR215_CL_0x2100.txt | 54 +++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt       |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit 0ca1dcd5bb80f46538f20f5226491356c8536d5a
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 15:53:13 2022 +0100
+
+    Add Circle CIR125-DOT ICC
+
+ readers/Circle_CIR125-DOT_ICC.txt | 54 +++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt     |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit bec5918390dc052f49fc032868172602f91f81ba
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 15:51:16 2022 +0100
+
+    Add Circle CCR7125 ICC
+
+ readers/Circle_CCR7125_ICC.txt | 54 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt  |  1 +
+ 2 files changed, 55 insertions(+)
+
+commit 8fcb0d2066c405f5b348458aea4857dc27239215
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Jan 5 15:49:40 2022 +0100
+
+    Add Circle CIR125 ICC
+
+ readers/Circle_CIR125_ICC.txt | 54 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  3 ++-
+ 2 files changed, 56 insertions(+), 1 deletion(-)
+
+commit fdfa06b98637444f5ef1a4c50c5a520cc9b63f0f
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Nov 17 13:17:08 2021 +0100
+
+    ylwrap: update copyright date
+
+ ylwrap | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit abb793b270704b0a33f8027253015fc82abbf72e
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Nov 6 14:32:30 2021 +0100
+
+    IFDHPowerICC: do not log an error for IFD_NO_SUCH_DEVICE
+    
+    When a reader is removed pcscd will try to cleanly close the driver and
+    will try to power down the card (if needed).
+    
+    WriteUSB() will correctly return STATUS_NO_SUCH_DEVICE. CmdPowerOff()
+    will also return STATUS_NO_SUCH_DEVICE.
+    But IFDHPowerICC() did not correctly handled this returned value.
+
+ src/ifdhandler.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+commit 6ebc18e90fea92caf8d79765b08cd6f137100fbe
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Nov 6 13:57:17 2021 +0100
+
+    Revert "multi-slots: Start the sequence number at 0 for a new slot"
+    
+    This reverts commit e3baafb89cee3eae9302e454ca25332401b9569c.
+
+ src/ccid_serial.c | 1 -
+ src/ccid_usb.c    | 1 -
+ 2 files changed, 2 deletions(-)
+
+commit d1ee8371e47802dd41a86d9303074214fb7814df
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 24 18:44:46 2021 +0200
+
+    Revert "Each slot has its own sequence number"
+    
+    The Gemalto GemCore SIM Pro Smart Card Reader, that has 2 slots, does
+    not like to have the same bSeq used for 2 consecutive commands on 2
+    different slots. The reader does not answer to the second command. I
+    guess it considers the 2nd command as duplicate ghost or something like
+    that.
+    
+    For example we get:
+    00000007 [140486031439616] ifdhandler.c:1209:IFDHPowerICC() action: PowerDown, usb:08
+    e6/3480:libudev:0:/dev/bus/usb/001/012 (lun: 0)
+    00000008 [140486031439616] -> 000000 63 00 00 00 00 00 04 00 00 00
+    00000257 [140486031439616] ccid_usb.c:948:ReadUSB() Waiting data for slot 0
+    00000320 [140486107440896] ccid_usb.c:1949:Multi_ReadProc() Read 10 bytes for slot 0
+    00000024 [140486107440896] ccid_usb.c:1957:Multi_ReadProc() Signaled reader 0 slot 0
+    00000005 [140486107440896] ccid_usb.c:1917:Multi_ReadProc() Waiting read for reader 0
+    00000076 [140486031439616] ccid_usb.c:962:ReadUSB() Got 10 bytes for slot 0
+    00000025 [140486031439616] <- 000000 81 00 00 00 00 00 04 01 00 00
+    00000008 [140486031439616] eventhandler.c:482:EHStatusHandlerThread() powerState: POW
+    ER_STATE_UNPOWERED
+    00000009 [140486031439616] ifdhandler.c:1915:IFDHICCPresence() usb:08e6/3480:libudev:
+    0:/dev/bus/usb/001/012 (lun: 0)
+    00000006 [140486031439616] ifdhandler.c:2041:IFDHICCPresence() Card present
+    00000007 [140486031439616] ifdhandler.c:317:IFDHPolling() usb:08e6/3480:libudev:0:/de
+    v/bus/usb/001/012 (lun: 0) 600000 ms
+    00000008 [140486031439616] ccid_usb.c:1801:Multi_InterruptRead() Multi_InterruptRead
+    (0), timeout: 600000 ms
+    00167330 [140486023046912] ifdhandler.c:1915:IFDHICCPresence() usb:08e6/3480:libudev:
+    0:/dev/bus/usb/001/012 (lun: 1)
+    00000026 [140486023046912] ifdhandler.c:2041:IFDHICCPresence() Card present
+    00000006 [140486023046912] ifdhandler.c:1209:IFDHPowerICC() action: PowerDown, usb:08
+    e6/3480:libudev:0:/dev/bus/usb/001/012 (lun: 1)
+    00000009 [140486023046912] -> 000001 63 00 00 00 00 01 04 00 00 00
+    00000260 [140486023046912] ccid_usb.c:948:ReadUSB() Waiting data for slot 1
+    [...]
+    02329717 [140486023046912] ccid_usb.c:956:ReadUSB() read failed (1/12): 110 Connection timed out
+    00000028 [140486023046912] ifdhandler.c:1225:IFDHPowerICC() PowerDown failed
+    
+    The first PC_to_RDR_IccPowerOff command uses bSeq=4 and is for slot=0.
+    This command works fine.
+    The second PC_to_RDR_IccPowerOff command is for the slot 1 but uses the
+    same bSeq=4. The driver never gets an answer for this command.
+    
+    I revert the change and now the bSeq value used by each command is uniq
+    for the reader.
+    
+    This reverts commit 5f63ca79cfa3291a943dd14a54fdefa56da3bf28.
+
+ src/ccid.h        |  3 ++-
+ src/ccid_serial.c |  3 ++-
+ src/ccid_usb.c    |  5 +++--
+ src/commands.c    | 18 +++++++++---------
+ 4 files changed, 16 insertions(+), 13 deletions(-)
+
+commit f30bd1fcb1c929b110165eec9cfc29f6b709ef5a
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Nov 2 16:16:26 2021 +0100
+
+    Rename Felica in FeliCa in filenames
+
+ readers/{SONY_Felica_RC-S300_P.txt => SONY_FeliCa_RC-S300_P.txt} | 0
+ readers/{SONY_Felica_RC-S300_S.txt => SONY_FeliCa_RC-S300_S.txt} | 0
+ readers/{SONY_Felica_RC-S660_U.txt => SONY_FeliCa_RC-S660_U.txt} | 0
+ 3 files changed, 0 insertions(+), 0 deletions(-)
+
+commit ab95559647e4382eae699b7823f997aedeb18c70
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Nov 1 13:27:00 2021 +0100
+
+    Fix bClassEnveloppe: field name for 3 Bit4id readers
+    
+    The correct name is "bClassEnvelope".
+    This problem has been fixed in CCID parse.c in
+    41119961d8138204b3168e0838272885829815be (May 2013).
+
+ readers/Bit4id_Digital_DNA_Key.txt | 2 +-
+ readers/Bit4id_tokenME_FIPS_v3.txt | 2 +-
+ readers/bit4id_TokenME-EVO.txt     | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+commit adde6fb74833b3ed47b0579863ca526e81483362
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 31 14:02:31 2021 +0100
+
+    DisconnectUSB(): disconnect all the slots of a multi-slot reader
+    
+    When a reader is removed all the slots will become unavailable.
+    
+    So to avoid errors logs like:
+    00299802 [139984241678080] ifdhandler.c:1911:IFDHICCPresence() usb:1c34/7124:libudev:0:/dev/bus/usb/001/016 (lun: 10003)
+    00000037 [139984241678080] -> 000004 65 00 00 00 00 03 06 00 00 00
+    00000051 [139984241678080] ccid_usb.c:871:WriteUSB() write failed (1/16): -4 LIBUSB_ERROR_NO_DEVICE
+    we mark all the slots of the same USB device as also disconnected.
+    
+    This improves the patch in b0cb37f1aee46d04c31c19273f23967f4ae8601c.
+
+ src/ccid_usb.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+commit 5d0b4e411b79b68e2166e168230f135ea73f2cb5
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 31 13:56:18 2021 +0100
+
+    Multi_InterruptRead: return IFD_NO_SUCH_DEVICE when exiting
+    
+    The value 0 (IFD_SUCCESS) is not a good answer when the driver is
+    stopping or removed.
+    
+    The conversion from 0 to IFD_NO_SUCH_DEVICE is no more done in
+    IFDHPolling() as the comments wrongly indicates since
+    commit f83c1ea6806c62d39ba7ba305c92f01658796e47 (Aug 2010) but the code
+    for multislots was not modified at the same time.
+    
+    We use IFD_NO_SUCH_DEVICE instead so that pcscd will wait a bit before
+    asking again.
+
+ src/ccid_usb.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+commit e3baafb89cee3eae9302e454ca25332401b9569c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Oct 30 11:07:20 2021 +0200
+
+    multi-slots: Start the sequence number at 0 for a new slot
+    
+    Each slot has its own sequence number (CCID bSeq field). When a new slot
+    is created we start the sequence number at 0 instead of using the value
+    from the previous slot that is copied.
+    
+    It is not important but it generates cleaner logs.
+
+ src/ccid_serial.c | 1 +
+ src/ccid_usb.c    | 1 +
+ 2 files changed, 2 insertions(+)
+
+commit 5f63ca79cfa3291a943dd14a54fdefa56da3bf28
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 24 18:44:46 2021 +0200
+
+    Each slot has its own sequence number
+
+ src/ccid.h        |  3 +--
+ src/ccid_serial.c |  3 +--
+ src/ccid_usb.c    |  5 ++---
+ src/commands.c    | 18 +++++++++---------
+ 4 files changed, 13 insertions(+), 16 deletions(-)
+
+commit a12a7eb202259b6241ec307fecf8b7d1e365bf7b
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 24 14:24:31 2021 +0200
+
+    Fix incorrect comment
+
+ src/ccid_usb.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit a4eb16ebf922a45cfdd1a916602206378118042a
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 24 14:17:34 2021 +0200
+
+    Fix typo in comment
+
+ src/ccid_usb.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit b801b8ac7be541939d951e2744e42ef0ac07f061
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Oct 27 11:32:43 2021 +0200
+
+    Add ACS ACR1281U
+
+ readers/ACS_ACR1281U.txt      | 54 +++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |  3 ++-
+ 2 files changed, 56 insertions(+), 1 deletion(-)
+
+commit 734cea683bdf39dc48816682ba4debcaa0941f47
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Mon Oct 25 09:18:18 2021 +0200
+
+    supported_readers: Use FeliCa instead of Felica on SONY request
+
+ readers/supported_readers.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+commit ca395d69a2975def7ef8cbf0e03117f5aa474a4f
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Oct 19 23:23:36 2021 +0200
+
+    t1_transceive: improve code style
+    
+    Declare "retries" as an "int" instead of a "unsigned int" so the test
+    "if (retries <= 0)" is true for negative values of retries.
+
+ src/openct/proto-t1.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+commit 831c435d490a1d51d456e04642e18434928c10d8
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Oct 19 22:44:33 2021 +0200
+
+    t1_negotiate_ifsd: improve code style
+    
+    Declare "retries" as an "int" instead of a "unsigned int" so the test
+    "if (retries <= 0)" is true for negative values of retries.
+    
+    Move the test on retries _before_ sending the T=1 block. In the previous
+    code the block was sent but the result was ignored on the third try.
+    
+    Update the check from "if (retries <= 0)" to "if (retries < 0)" so that
+    we really perform 3 tries instead of just 2.
+    
+    Thanks to Stas Sergeev for the bug report
+    Fix https://github.com/LudovicRousseau/CCID/issues/91
+
+ src/openct/proto-t1.c | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+commit c7d04806efb9a1a0c1b57a444b2e84d93eeb7558
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Oct 13 21:36:08 2021 +0200
+
+    Add Nitrokey Nitrokey 3
+
+ readers/Nitrokey_Nitrokey_3.txt | 50 +++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt   |  3 ++-
+ 2 files changed, 52 insertions(+), 1 deletion(-)
+
+commit b0cb37f1aee46d04c31c19273f23967f4ae8601c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Oct 10 17:20:04 2021 +0200
+
+    Avoid logging errors when a reader is removed
+    
+    Add support of TAG_IFD_DEVICE_REMOVED
+    This tag has been introduced in pcsc-lite version 1.9.5.
+    
+    When the driver receives the tag TAG_IFD_DEVICE_REMOVED it marks the
+    USB device as disconnected and will not try to talk to it any more.
+    
+    So when a USB CCID reader is remove we do not have these errors in the
+    logs any more:
+    00000000 [140295925790464] ccid_usb.c:871:WriteUSB() write failed (1/22): -4 LIBUSB_ERROR_NO_DEVICE
+    00000506 [140295934183168] ccid_usb.c:871:WriteUSB() write failed (1/22): -4 LIBUSB_ERROR_NO_DEVICE
+    
+    The first error is because IFDHICCPresence() sends the CCID command
+    PC_to_RDR_GetSlotStatus to know if a card is present.
+    
+    The second error is because IFDHCloseChannel() sends the CCID command
+    PC_to_RDR_IccPowerOff to power off the card.
+    
+    But since the USB device has been removed these 2 CCID commands will
+    fail and log the error.
+    
+    Thanks to Jakub Jelen for the bug report
+    " Reader disconnects are noisy in journal/logs #110 "
+    https://github.com/LudovicRousseau/PCSC/issues/110
+    
+    See also https://bugzilla.redhat.com/show_bug.cgi?id=2011128
+
+ src/ccid_serial.c | 15 +++++++++++++++
+ src/ccid_serial.h |  2 ++
+ src/ccid_usb.c    | 28 ++++++++++++++++++++++++++++
+ src/ccid_usb.h    |  1 +
+ src/defs.h        |  2 ++
+ src/ifdhandler.c  | 29 ++++++++++++++++++++++++++++-
+ 6 files changed, 76 insertions(+), 1 deletion(-)
+
+commit daadc5806c01b1d3b92cd7f7a90387a095578553
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sat Oct 9 18:40:06 2021 +0200
+
+    utils: Use a more special value to indicate a free slot
+    
+    The value -1 is not so special as it is also used by pcscd to mark an
+    invalid slot.
+    libccid was happy with Lun = -1 for a reader. This should NOT be the
+    case.
+    
+    Now the special value is -42.
+
+ src/utils.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+commit 84bd2cc64c259f818da568b812f63e2475cfc09c
+Merge: cb242a7 92a5302
+Author: Ludovic Rousseau <ludovic.rousseau+github@gmail.com>
+Date:   Wed Sep 29 11:38:09 2021 +0200
+
+    Merge pull request #90 from emaxx-google/omnikey-5427-ck
+    
+    Allow vendor control commands for Omnikey 5427 CK
+
+commit 92a5302eb17146574b0d941739264598144f7fcf (github/pr/90)
+Author: Maksim Ivanov <emaxx@google.com>
+Date:   Wed Sep 29 07:52:52 2021 +0200
+
+    Allow vendor control commands for Omnikey 5427 CK
+    
+    By default, the PC/SC protocol doesn't allow sending commands (APDUs) to
+    a reader that doesn't have a card inserted. There's a legitimate use
+    case (which exactly, isn't relevant here) for supporting this for the
+    Omnikey 5427 CK reader.
+    
+    This reader provides a capability for sending APDUs, but only via a
+    vendor control command. By default, vendor control commands are
+    forbidden, and can be enabled for all readers via setting the
+    "ifdDriverOptions" parameter in the Info.plist config to have the bit
+    "1" (DRIVER_OPTION_CCID_EXCHANGE_AUTHORIZED). However, enabling this
+    parametere in the config might impose a security risk when using some
+    readers and applications (see
+    https://ludovicrousseau.blogspot.com/2011/10/featureccidesccommand.html).
+    Hence the solution in this commit is to special-case the Omnikey 5427
+    CK reader and allow any application to send control commands. It was
+    confirmed with the reader's vendor that this doesn't impose a security
+    risk here.
+
+ src/ccid.h       | 1 +
+ src/ifdhandler.c | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+commit cb242a71fd07dea1a8e4f9efc48684842e7a9387
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Sep 19 10:27:44 2021 +0200
+
+    Hack to hide the ELYCTIS CNT reader reader
+    
+    The ELYCTIS reader is a composite reader with 3 iterfaces:
+    one 0x1FFA:0x0002:ELYCTIS CL reader
+    and two 0x04E6:0x5810:ELYCTIS CNT reader
+    
+    But the "ELYCTIS CNT reader" is in fact a "Identive CLOUD 2700 R Smart
+    Card Reader" renamed. They both share the same VID/PID.
+    
+    Since "ELYCTIS" is before "Identive" in the alphabetical order the
+    VID/PID 0x04E6:0x5810 was now associated with ELYCTIS and not Identive.
+    
+    The hack is to rename ELYCTIS into ~ELYCTIS for the 2 contact interfaces
+    so that Identive comes first in the alpahetical order.
+
+ readers/ELYCTIS_CL_reader.txt | 4 ++--
+ readers/supported_readers.txt | 4 +++-
+ 2 files changed, 5 insertions(+), 3 deletions(-)
+
+commit baa0c6e17287ee759bb1d06ca8c505033c62706c
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Sun Sep 19 10:27:20 2021 +0200
+
+    Add ELYCTIS CL reader
+
+ readers/ELYCTIS_CL_reader.txt | 165 ++++++++++++++++++++++++++++++++++++++++++
+ readers/supported_readers.txt |   7 +-
+ 2 files changed, 170 insertions(+), 2 deletions(-)
+
+commit 26ad96076523472e9d0d383d014e7b1ad241fd5b
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Wed Sep 8 11:28:48 2021 +0200
+
+    Fix SafeNet eToken 5110 SC issue (firmware 0.13)
+    
+    The SafeNet eToken 5110 SC with firmware 0.13 has the same problem as
+    the token with firmware 0.12.
+    We use the same oslution to fix the problem.
+    
+    Thanks again to Vladimir K for the bug report.
+
+ src/ccid.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+commit b48e1e697010431b7f03d4ecfe917ceee95e2c64
+Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
+Date:   Tue Sep 7 14:06:46 2021 +0200
+
+    Fix SafeNet eToken 5110 SC issue
+    
+    Some SafeNet eToken 5100 (but not all) have issues when IFSD is negotiated.
+    For some APDU the communication stops and the token returns 0 bytes.
+    
+    It is the case with the SafeNet eToken 5110 SC with
+    ATR: 3B D5 18 00 81 31 3A 7D 80 73 C8 21 10 30
+    and PC/SC name "SafeNet eToken 5100 [eToken 5110 SC]"
+    
+    Another SafeNet eToken 5100 with
+    ATR: 3B D5 18 00 81 31 FE 7D 80 73 C8 21 10 F4
+    and PC/SC name "SafeNet eToken 5100 [Main Interface]"
+    does NOT have problems with the the IFSD negotiation.
+    
+    The 2 devices have (luckily) a different USB CCID descriptor:
+    --- eToken5100_bug      2021-09-07 11:58:30.245354659 +0200
+    +++ eToken5100_ok       2021-09-07 11:58:36.621432673 +0200
+    @@ -2,7 +2,7 @@
+       iManufacturer: SafeNet
+      idProduct: 0x0620
+       iProduct: Token JC
+    - bcdDevice: 0.12 (firmware release?)
+    + bcdDevice: 1.00 (firmware release?)
+      bLength: 9
+      bDescriptorType: 4
+      bInterfaceNumber: 0
+    @@ -13,7 +13,7 @@
+      bInterfaceSubClass: 0
+      bInterfaceProtocol: 0
+       bulk transfer, optional interrupt-IN (CCID)
+    - iInterface: eToken 5110 SC
+    + iInterface: Main Interface
+      CCID Class Descriptor
+       bLength: 0x36
+       bDescriptorType: 0x21
+    @@ -26,24 +26,23 @@
+       dwProtocols: 0x0000 0x0003
+        T=0
+        T=1
+    -  dwDefaultClock: 4.800 MHz
+    -  dwMaximumClock: 4.800 MHz
+    +  dwDefaultClock: 4.000 MHz
+    +  dwMaximumClock: 4.000 MHz
+       bNumClockSupported: 0 (will use whatever is returned)
+        IFD does not support GET CLOCK FREQUENCIES request: LIBUSB_ERROR_PIPE
+    -  dwDataRate: 12903 bps
+    -  dwMaxDataRate: 12903 bps
+    +  dwDataRate: 10752 bps
+    +  dwMaxDataRate: 10752 bps
+       bNumDataRatesSupported: 0 (will use whatever is returned)
+        IFD does not support GET_DATA_RATES request: LIBUSB_ERROR_PIPE
+    -  dwMaxIFSD: 128
+    +  dwMaxIFSD: 252
+       dwSynchProtocols: 0x00000000
+       dwMechanical: 0x00000000
+        No special characteristics
+    -  dwFeatures: 0x0001027C
+    +  dwFeatures: 0x0001023C
+        ....04 Automatic activation of ICC on inserting
+        ....08 Automatic ICC voltage selection
+        ....10 Automatic ICC clock frequency change according to parameters
+        ....20 Automatic baud rate change according to frequency and Fi, Di params
+    -   ....40 Automatic parameters negotiation made by the CCID
+        ..02.. NAD value other than 00 accepted (T=1)
+        01.... TPDU level exchange
+       dwMaxCCIDMessageLength: 271 bytes
+    
+    This fixes Debian bug #993647
+    https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=993647
+
+ src/ccid.c | 7 +++++++
+ src/ccid.h | 1 +
+ 2 files changed, 8 insertions(+)
+
+commit 74642f87f9e1a937e807acd3a7d2ef600b8d151c (tag: 1.4.36)
 Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
 Date:   Mon Aug 30 11:14:49 2021 +0200
 
@@ -94,7 +2225,7 @@ Date:   Tue Jul 27 17:05:51 2021 +0200
  readers/supported_readers.txt                  |  3 +-
  2 files changed, 60 insertions(+), 1 deletion(-)
 
-commit c0c84311c47fcae11ab34ec7b1f70f9518e37931 (tag: 1.4.35, github/master)
+commit c0c84311c47fcae11ab34ec7b1f70f9518e37931 (tag: 1.4.35)
 Author: Ludovic Rousseau <ludovic.rousseau@free.fr>
 Date:   Sun Jul 25 16:00:35 2021 +0200
 
