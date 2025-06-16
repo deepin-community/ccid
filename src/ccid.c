@@ -76,7 +76,7 @@ int ccid_open_hack_pre(unsigned int reader_index)
 			 * connected to a USB 3 port */
 			if (0x0200 == ccid_descriptor->IFD_bcdDevice)
 			{
-				ccid_descriptor->zlp = TRUE;
+				ccid_descriptor->zlp = true;
 				DEBUG_INFO1("ZLP fixup");
 			}
 			break;
@@ -101,6 +101,37 @@ int ccid_open_hack_pre(unsigned int reader_index)
 		case IDENTIV_uTrust4701F:
 			/* The SCM SCL011 reader needs 350 ms to answer */
 			ccid_descriptor->readTimeout = DEFAULT_COM_READ_TIMEOUT * 4;
+			break;
+
+		case ALCORMICRO_AU9540:
+			{
+			unsigned int *uint_array = ccid_descriptor->arrayOfSupportedDataRates;
+			unsigned int max_speed = 200000;
+			unsigned int *after, current_speed;
+
+			/* check the list exists */
+			if (uint_array != NULL)
+			{
+				/* keep in the list only the baud rates lower than
+				 * max_speed */
+				after = uint_array;
+				while ((current_speed = *uint_array++) != 0)
+				{
+					if (current_speed > max_speed)
+					{
+						DEBUG_INFO2("Remove baudrate: %d", current_speed);
+						continue;
+					}
+
+					*after++ = current_speed;
+				}
+				/* terminate the (new) list */
+				*after = 0;
+			}
+
+			/* update the max data rate with the new value */
+			ccid_descriptor->dwMaxDataRate = max_speed;
+			}
 			break;
 	}
 
@@ -224,7 +255,7 @@ static void set_gemalto_firmware_features(unsigned int reader_index)
 		RESPONSECODE ret;
 
 		ret = CmdEscapeCheck(reader_index, cmd, sizeof cmd,
-			(unsigned char*)gf_features, &len_features, 0, TRUE);
+			(unsigned char*)gf_features, &len_features, 0, true);
 		if ((IFD_SUCCESS == ret) &&
 			(len_features == sizeof *gf_features))
 		{
@@ -404,11 +435,11 @@ int ccid_open_hack_post(unsigned int reader_index)
 				/* The other Unixes just use the LANG env variable */
 				lang = getenv("LANG");
 #endif
-				DEBUG_COMM2("Using lang: %s", lang);
 				if (NULL == lang)
 					l10n = en;
 				else
 				{
+                    DEBUG_COMM2("Using lang: %s", lang);
 					if (0 == strncmp(lang, "fr", 2))
 						l10n = fr;
 					else if (0 == strncmp(lang, "de", 2))
@@ -576,6 +607,14 @@ int ccid_open_hack_post(unsigned int reader_index)
 			 * have one */
 			ccid_descriptor->bPINSupport = 0;
 			break;
+
+		case SAFENET_ETOKEN_5100:
+			/* the old SafeNet eToken 5110 SC (firmware 0.12 & 0.13)
+			 * does not like IFSD negotiation. So disable it. */
+			if ((0x0012 == ccid_descriptor->IFD_bcdDevice)
+				|| (0x0013 == ccid_descriptor->IFD_bcdDevice))
+				ccid_descriptor->dwFeatures |= CCID_CLASS_AUTO_IFSD;
+			break;
 	}
 
 	/* Gemalto readers may report additional information */
@@ -711,6 +750,12 @@ void ccid_error(int log_level, int error, const char *file, int line,
 			break;
 	}
 	log_msg(log_level, "%s:%d:%s %s", file, line, function, text);
+#else
+	(void)log_level;
+	(void)error;
+	(void)file;
+	(void)line;
+	(void)function;
 #endif
 
 } /* ccid_error */

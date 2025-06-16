@@ -1,8 +1,35 @@
-ccid (1.4.36-2deepin2) unstable; urgency=medium
+ccid (1.5.2-1) unstable; urgency=medium
 
-  * adapt reader for wotrus MeSince MK-1.
+  * New upstream release
+  * d/control: Standards-Version: 4.6.1 -> 4.6.2. No change needed
 
- -- luxinyou <luxinyou@uniontech.com>  Mon, 12 Aug 2024 10:48:36 +0200
+ -- Ludovic Rousseau <rousseau@debian.org>  Tue, 31 Jan 2023 17:30:40 +0100
+
+ccid (1.5.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Fix "libccid >= 1.4.35 breaks SafeNet tokens" (Closes: #993647)
+  * d/control: Standards-Version: 4.6.0 -> 4.6.1. No change needed
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Mon, 14 Nov 2022 11:50:32 +0100
+
+ccid (1.5.0-2) unstable; urgency=medium
+
+  * Fix "invoke-rc.d pcscd restart might fail in postinst" do not fail
+    on error (Closes: #1005939)
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 18 Feb 2022 11:18:25 +0100
+
+ccid (1.5.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * d/postinst: restart pcscd on install
+    See #995814
+  * Fix "usability: do a try-restart of pcscd on fresh install" restart
+    pcscd on install/upgrade (Closes: #864656)
+  * d/control: Standards-Version: 4.5.1 -> 4.6.0. No change needed
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Thu, 27 Jan 2022 13:49:34 +0100
 
 ccid (1.4.36-2) unstable; urgency=medium
 
