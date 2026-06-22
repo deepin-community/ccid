@@ -1,9 +1,51 @@
-ccid (1.5.2-1deepin1) unstable; urgency=medium
+ccid (1.6.2-1) unstable; urgency=medium
 
-  [ luxinyou ]
-  * Adapt reader for wotrus MeSince MK-1.
+  * New upstream release
 
- -- Tianyu Chen <sweetyfish@deepin.org>  Mon, 16 Jun 2025 14:18:50 +0800
+ -- Ludovic Rousseau <rousseau@debian.org>  Wed, 19 Mar 2025 17:55:40 +0100
+
+ccid (1.6.1-2) unstable; urgency=medium
+
+  [ Helmut Grohne ]
+  * Fix FTCBFS: Don't meson configure with a different build directory.
+    (Closes: #1083047)
+
+  [ Ludovic Rousseau ]
+  * d/control: Standards-Version: 4.6.2 -> 4.7.0. No change needed
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Tue, 01 Oct 2024 22:30:56 +0200
+
+ccid (1.6.1-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 05 Jul 2024 11:03:58 +0200
+
+ccid (1.6.0-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sat, 01 Jun 2024 15:26:07 +0200
+
+ccid (1.5.5-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 05 Jan 2024 10:54:34 +0100
+
+ccid (1.5.4-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sun, 29 Oct 2023 17:53:47 +0100
+
+ccid (1.5.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * Reformat Build-Depends:
+  * Add Build-Depends: zlib1g-dev
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Wed, 25 Oct 2023 17:43:12 +0200
 
 ccid (1.5.2-1) unstable; urgency=medium
 

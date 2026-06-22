@@ -44,7 +44,6 @@
 #define SYNC 0x03
 #define CTRL_ACK 0x06
 #define CTRL_NAK 0x15
-#define RDR_to_PC_NotifySlotChange 0x50
 #define CARD_ABSENT 0x02
 #define CARD_PRESENT 0x03
 
@@ -142,16 +141,16 @@ typedef struct
 #include "ccid_serial.h"
 
 /* data rates supported by the GemPC Twin (serial and PCMCIA) */
-unsigned int SerialTwinDataRates[] = { ISO_DATA_RATES, 0 };
+static unsigned int SerialTwinDataRates[] = { ISO_DATA_RATES, 0 };
 
 /* data rates supported by the GemPC PinPad, GemCore Pos Pro & SIM Pro */
-unsigned int SerialExtendedDataRates[] = { ISO_DATA_RATES, 500000, 0 };
+static unsigned int SerialExtendedDataRates[] = { ISO_DATA_RATES, 500000, 0 };
 
 /* data rates supported by the secondary slots on the GemCore Pos Pro & SIM Pro */
-unsigned int SerialCustomDataRates[] = { GEMPLUS_CUSTOM_DATA_RATES, 0 };
+static unsigned int SerialCustomDataRates[] = { GEMPLUS_CUSTOM_DATA_RATES, 0 };
 
 /* data rates supported by the GemCore SIM Pro 2 */
-unsigned int SIMPro2DataRates[] = { SIMPRO2_ISO_DATA_RATES, 0  };
+static unsigned int SIMPro2DataRates[] = { SIMPRO2_ISO_DATA_RATES, 0  };
 
 /* no need to initialize to 0 since it is static */
 static _serialDevice serialDevice[CCID_DRIVER_MAX_READERS];
@@ -880,7 +879,7 @@ status_t OpenSerialByName(unsigned int reader_index, char *dev_name)
 
 	/* perform a command to configure GemPC Twin reader card movement
 	 * notification to synchronous mode: the card movement is notified _after_
-	 * the host command and _before_ the reader anwser */
+	 * the host command and _before_ the reader answer */
 	if (0 != strcasecmp(reader_name,"SEC1210"))
 	{
 		unsigned char tx_buffer[] = { 0x01, 0x01, 0x01};
@@ -922,7 +921,7 @@ status_t CloseSerial(unsigned int reader_index)
 	/* Decrement number of opened slot */
 	(*serialDevice[reader_index].nb_opened_slots)--;
 
-	/* release the allocated ressources for the last slot only */
+	/* release the allocated resources for the last slot only */
 	if (0 == *serialDevice[reader_index].nb_opened_slots)
 	{
 		DEBUG_COMM("Last slot closed. Release resources");

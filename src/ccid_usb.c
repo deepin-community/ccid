@@ -60,7 +60,7 @@
 /* Using the default libusb context */
 /* does not work for libusb <= 1.0.8 */
 /* #define ctx NULL */
-libusb_context *ctx = NULL;
+static libusb_context *ctx = NULL;
 
 #define CCID_INTERRUPT_SIZE 8
 
@@ -114,7 +114,10 @@ typedef struct
 	_ccid_descriptor ccid;
 
 	/* libusb transfer for the polling (or NULL) */
-	_Atomic (struct libusb_transfer *) polling_transfer;
+	pthread_mutex_t polling_transfer_mutex;
+	struct libusb_transfer *polling_transfer;
+	/* whether the polling should be terminated */
+	bool terminate_requested;
 
 	/* pointer to the multislot extension (if any) */
 	struct usbDevice_MultiSlot_Extension *multislot_extension;
@@ -132,13 +135,13 @@ static struct usbDevice_MultiSlot_Extension *Multi_CreateFirstSlot(int reader_in
 static struct usbDevice_MultiSlot_Extension *Multi_CreateNextSlot(int physical_reader_index);
 static void Multi_PollingTerminate(struct usbDevice_MultiSlot_Extension *msExt);
 
-static int get_end_points(struct libusb_config_descriptor *desc,
-	_usbDevice *usbdevice, int num);
-bool ccid_check_firmware(struct libusb_device_descriptor *desc);
+static int get_end_points(const struct libusb_interface *usb_interface,
+	_usbDevice *usbdevice);
+static bool ccid_check_firmware(struct libusb_device_descriptor *desc);
 static unsigned int *get_data_rates(unsigned int reader_index,
-	struct libusb_config_descriptor *desc, int num);
+	const unsigned char bNumDataRatesSupported);
 
-/* ne need to initialize to 0 since it is static */
+/* no need to initialize to 0 since it is static */
 static _usbDevice usbDevice[CCID_DRIVER_MAX_READERS];
 
 #define PCSCLITE_MANUKEY_NAME "ifdVendorID"
@@ -179,7 +182,7 @@ static struct _bogus_firmware Bogus_firmwares[] = {
 };
 
 /* data rates supported by the secondary slots on the GemCore Pos Pro & SIM Pro */
-unsigned int SerialCustomDataRates[] = { GEMPLUS_CUSTOM_DATA_RATES, 0 };
+static unsigned int SerialCustomDataRates[] = { GEMPLUS_CUSTOM_DATA_RATES, 0 };
 
 /*****************************************************************************
  *
@@ -250,6 +253,10 @@ status_t OpenUSBByName(unsigned int reader_index, /*@null@*/ char *device)
 	bool claim_failed = false;
 	int return_value = STATUS_SUCCESS;
 	const char * hpDirPath;
+#ifdef USE_COMPOSITE_AS_MULTISLOT
+	/* use the first CCID interface on first call */
+	static int static_interface = -1;
+#endif
 
 	DEBUG_COMM3("Reader index: %X, Device: " LOG_STRING, reader_index, device);
 
@@ -448,8 +455,8 @@ again_libusb:
 
 #ifdef USE_COMPOSITE_AS_MULTISLOT
 				/* use the first CCID interface on first call */
-				static int static_interface = -1;
 				int max_interface_number = -1;
+				int num_CCID_interfaces = 1;
 
 				/*
 				 * We can't talk to the two CCID interfaces
@@ -481,7 +488,13 @@ again_libusb:
 					case HID_OMNIKEY_5422:
 					case ALCOR_LINK_AK9567:
 					case ALCOR_LINK_AK9572:
+					case ACS_WALLETMATE:
+					case ACS_ACR1251:
+					case ACS_ACR1252:
+					case ACS_ACR1252IMP:
+					case ACS_ACR1552:
 						max_interface_number = 1; /* 2 interfaces */
+						num_CCID_interfaces = 2;  /* 2 CCID interfaces */
 						break;
 
 					/* For the Gemalto Prox-DU/SU the interfaces are:
@@ -492,6 +505,12 @@ again_libusb:
 					case GEMALTOPROXDU:
 					case GEMALTOPROXSU:
 						max_interface_number = 2; /* 3 interfaces */
+						num_CCID_interfaces = 2;  /* 2 CCID interfaces */
+						break;
+
+					case ACS_ACR1581:
+						max_interface_number = 2; /* 3 interfaces */
+						num_CCID_interfaces = 3;  /* 3 CCID interfaces */
 						break;
 
 					/* For the Feitian R502 the interfaces are:
@@ -502,6 +521,35 @@ again_libusb:
 					 */
 					case FEITIANR502DUAL:
 						max_interface_number = 3; /* 4 interfaces */
+						num_CCID_interfaces = 4;  /* 4 CCID interfaces */
+						break;
+
+					/* Kap-eCV: only the first interface is a CCID one
+					 * 0: CCID contactless
+					 * 1: HID
+					 * 2: CDC
+					 * We need to handle this case here even if
+					 * because we have a generic test for all Kapelse
+					 * readers (VENDOR_KAPELSE) later in the code
+					 */
+					case KAPELSE_KAPECV:
+						max_interface_number = 0;
+						num_CCID_interfaces = 1;
+						break;
+
+					/* Kap&Link2: only 3 first interfaces are CCID ones
+					 * 0: CCID contact
+					 * 1: CCID contactless
+					 * 2: CCID contactless
+					 * or, depending on user configuration:
+					 * 0: CCID contact
+					 * 1: CCID contactless
+					 * 2: CCID contactless
+					 * 3: CDC-ACM
+					 */
+					case KAPELSE_KAPLIN2:
+						max_interface_number = 2;
+						num_CCID_interfaces = 3;
 						break;
 				}
 
@@ -634,6 +682,15 @@ again:
 				}
 #endif
 
+#ifdef USE_COMPOSITE_AS_MULTISLOT
+				if ((VENDOR_KAPELSE == GET_VENDOR(readerID))
+					&& (-1 == max_interface_number))
+				{
+					/* Kapelse: all interfaces are CCID ones */
+					num_CCID_interfaces = config_desc->bNumInterfaces;
+					max_interface_number = num_CCID_interfaces-1;
+				}
+#endif
 
 				usb_interface = get_ccid_usb_interface(config_desc, &num);
 				if (usb_interface == NULL)
@@ -702,25 +759,20 @@ again:
 				}
 
 #ifdef USE_COMPOSITE_AS_MULTISLOT
-				if ((GEMALTOPROXDU == readerID)
-					|| (GEMALTOPROXSU == readerID)
-					|| (HID_OMNIKEY_5422 == readerID)
-					|| (ALCOR_LINK_AK9567 == readerID)
-					|| (ALCOR_LINK_AK9572 == readerID)
-					|| (FEITIANR502DUAL == readerID))
+				/* only if max_interface_number has a value set earlier */
+				if (max_interface_number >= 0)
 				{
 					/* use the next interface for the next "slot" */
 					static_interface = interface + 1;
 
 					/* reset for a next reader */
-					/* max interface number for all 3 readers is 2 */
 					if (static_interface > max_interface_number)
 						static_interface = -1;
 				}
 #endif
 
 				/* Get Endpoints values*/
-				(void)get_end_points(config_desc, &usbDevice[reader_index], num);
+				(void)get_end_points(usb_interface, &usbDevice[reader_index]);
 
 				/* store device information */
 				usbDevice[reader_index].dev_handle = dev_handle;
@@ -729,10 +781,15 @@ again:
 				usbDevice[reader_index].interface = interface;
 				usbDevice[reader_index].real_nb_opened_slots = 1;
 				usbDevice[reader_index].nb_opened_slots = &usbDevice[reader_index].real_nb_opened_slots;
-				atomic_init(&usbDevice[reader_index].polling_transfer, NULL);
+				pthread_mutex_init(&usbDevice[reader_index].polling_transfer_mutex, NULL);
+				usbDevice[reader_index].polling_transfer = NULL;
+				usbDevice[reader_index].terminate_requested = false;
 				usbDevice[reader_index].disconnected = false;
 
-				/* CCID common informations */
+				/* CCID common information */
+#ifdef USE_COMPOSITE_AS_MULTISLOT
+				usbDevice[reader_index].ccid.num_interfaces = num_CCID_interfaces;
+#endif
 				usbDevice[reader_index].ccid.real_bSeq = 0;
 				usbDevice[reader_index].ccid.pbSeq = &usbDevice[reader_index].ccid.real_bSeq;
 				usbDevice[reader_index].ccid.readerID =
@@ -750,7 +807,7 @@ again:
 				usbDevice[reader_index].ccid.bCurrentSlotIndex = 0;
 				usbDevice[reader_index].ccid.readTimeout = DEFAULT_COM_READ_TIMEOUT;
 				if (device_descriptor[27])
-					usbDevice[reader_index].ccid.arrayOfSupportedDataRates = get_data_rates(reader_index, config_desc, num);
+					usbDevice[reader_index].ccid.arrayOfSupportedDataRates = get_data_rates(reader_index, device_descriptor[27]);
 				else
 				{
 					usbDevice[reader_index].ccid.arrayOfSupportedDataRates = NULL;
@@ -833,6 +890,11 @@ end:
 		if (claim_failed)
 			return STATUS_COMM_ERROR;
 		DEBUG_INFO1("Device not found?");
+
+#ifdef USE_COMPOSITE_AS_MULTISLOT
+		static_interface = -1;
+#endif
+
 		return STATUS_NO_SUCH_DEVICE;
 	}
 
@@ -949,7 +1011,11 @@ read_again:
 			time_t timeout_sec = usbDevice[reader_index].ccid.readTimeout  / 1000;
 			long timeout_msec = usbDevice[reader_index].ccid.readTimeout - timeout_sec * 1000;
 
+#ifdef HAVE_PTHREAD_CONDATTR_SETCLOCK
+			clock_gettime(CLOCK_MONOTONIC, &timeout);
+#else
 			clock_gettime(CLOCK_REALTIME, &timeout);
+#endif
 			timeout.tv_sec += timeout_sec;
 			timeout.tv_nsec += timeout_msec * 1000 * 1000;
 			if (timeout.tv_nsec > 1000 * 1000 * 1000)
@@ -1056,7 +1122,7 @@ status_t CloseUSB(unsigned int reader_index)
 	/* one slot closed */
 	(*usbDevice[reader_index].nb_opened_slots)--;
 
-	/* release the allocated ressources for the last slot only */
+	/* release the allocated resources for the last slot only */
 	if (0 == *usbDevice[reader_index].nb_opened_slots)
 	{
 		struct usbDevice_MultiSlot_Extension *msExt;
@@ -1099,6 +1165,8 @@ status_t CloseUSB(unsigned int reader_index)
 			usbDevice[reader_index].multislot_extension = NULL;
 		}
 
+		pthread_mutex_destroy(&usbDevice[reader_index].polling_transfer_mutex);
+
 		if (usbDevice[reader_index].ccid.gemalto_firmware_features)
 			free(usbDevice[reader_index].ccid.gemalto_firmware_features);
 
@@ -1119,6 +1187,8 @@ status_t CloseUSB(unsigned int reader_index)
 	/* mark the resource unused */
 	usbDevice[reader_index].dev_handle = NULL;
 	usbDevice[reader_index].interface = 0;
+	usbDevice[reader_index].bus_number = 0;
+	usbDevice[reader_index].device_address = 0;
 
 	close_libusb_if_needed();
 
@@ -1134,11 +1204,13 @@ status_t CloseUSB(unsigned int reader_index)
 status_t DisconnectUSB(unsigned int reader_index)
 {
 	DEBUG_COMM("Disconnect reader");
-	libusb_device_handle * dev_handle = usbDevice[reader_index].dev_handle;
+	int bus_number = usbDevice[reader_index].bus_number;
+	int device_address = usbDevice[reader_index].device_address;
 
 	for (int i=0; i<CCID_DRIVER_MAX_READERS; i++)
 	{
-		if (usbDevice[i].dev_handle == dev_handle)
+		if ((usbDevice[i].bus_number == bus_number)
+			&& (usbDevice[i].device_address == device_address))
 		{
 			DEBUG_COMM2("Disconnect reader: %d", i);
 			usbDevice[i].disconnected = true;
@@ -1170,6 +1242,11 @@ const unsigned char *get_ccid_device_descriptor(const struct libusb_interface *u
 #ifdef O2MICRO_OZ776_PATCH
 	uint8_t last_endpoint;
 #endif
+
+	if (0 == usb_interface->num_altsetting) {
+		/* No interface descriptor available. */
+		return NULL;
+	}
 
 	if (54 == usb_interface->altsetting->extra_length)
 		return usb_interface->altsetting->extra;
@@ -1207,14 +1284,12 @@ const unsigned char *get_ccid_device_descriptor(const struct libusb_interface *u
  *					get_end_points
  *
  ****************************************************************************/
-static int get_end_points(struct libusb_config_descriptor *desc,
-	_usbDevice *usbdevice, int num)
+static int get_end_points(
+	const struct libusb_interface *usb_interface,
+	_usbDevice *usbdevice)
 {
 	int i;
 	int bEndpointAddress;
-	const struct libusb_interface *usb_interface;
-
-	usb_interface = get_ccid_usb_interface(desc, &num);
 
 	/*
 	 * 3 Endpoints maximum: Interrupt In, Bulk In, Bulk Out
@@ -1285,6 +1360,10 @@ uint8_t get_ccid_usb_device_address(int reader_index)
 	/* if multiple interfaces use the first one with CCID class type */
 	for (i = *num; i < desc->bNumInterfaces; i++)
 	{
+		if (desc->interface[i].num_altsetting == 0) {
+			/* No interface descriptor available. */
+			continue;
+		}
 		/* CCID Class? */
 		if (desc->interface[i].altsetting->bInterfaceClass == 0xb
 #ifdef ALLOW_PROPRIETARY_CLASS
@@ -1326,7 +1405,7 @@ bool ccid_check_firmware(struct libusb_device_descriptor *desc)
 		{
 			if (DriverOptions & DRIVER_OPTION_USE_BOGUS_FIRMWARE)
 			{
-				DEBUG_INFO3("Firmware (%X.%02X) is bogus! but you choosed to use it",
+				DEBUG_INFO3("Firmware (%X.%02X) is bogus! but you chose to use it",
 					desc->bcdDevice >> 8, desc->bcdDevice & 0xFF);
 				return false;
 			}
@@ -1350,21 +1429,19 @@ bool ccid_check_firmware(struct libusb_device_descriptor *desc)
  *
  ****************************************************************************/
 static unsigned int *get_data_rates(unsigned int reader_index,
-	struct libusb_config_descriptor *desc, int num)
+	const unsigned char bNumDataRatesSupported)
 {
 	int n, i, len;
 	unsigned char buffer[256*sizeof(int)];	/* maximum is 256 records */
 	unsigned int *uint_array;
-	int bNumDataRatesSupported;
 
-	bNumDataRatesSupported = get_ccid_device_descriptor(get_ccid_usb_interface(desc, &num))[27];
 	if (0 == bNumDataRatesSupported)
 		/* read up to the buffer size */
 		len = sizeof(buffer) / sizeof(int);
 	else
 		len = bNumDataRatesSupported;
 
-	/* See CCID 3.7.3 page 25 */
+	/* See CCID v1.1 ch. 5.3.3 GET_DATA_RATES page 24  */
 	n = ControlUSB(reader_index,
 		0xA1, /* request type */
 		0x03, /* GET_DATA_RATES */
@@ -1405,7 +1482,7 @@ static unsigned int *get_data_rates(unsigned int reader_index,
 		return NULL;
 	}
 
-	/* convert in correct endianess */
+	/* convert in correct endianness */
 	for (i=0; i<n; i++)
 	{
 		uint_array[i] = dw2i(buffer, i*4);
@@ -1483,6 +1560,12 @@ int InterruptRead(int reader_index, int timeout /* in ms */)
 	if (usbDevice[reader_index].multislot_extension != NULL)
 		return Multi_InterruptRead(reader_index, timeout);
 
+	if (usbDevice[reader_index].disconnected)
+	{
+		DEBUG_COMM("Reader disconnected");
+		return IFD_NO_SUCH_DEVICE;
+	}
+
 	DEBUG_PERIODIC3("before (%d), timeout: %d ms", reader_index, timeout);
 
 	transfer = libusb_alloc_transfer(0);
@@ -1503,7 +1586,18 @@ int InterruptRead(int reader_index, int timeout /* in ms */)
 		return IFD_COMMUNICATION_ERROR;
 	}
 
-	atomic_store(&usbDevice[reader_index].polling_transfer, transfer);
+	pthread_mutex_lock(&usbDevice[reader_index].polling_transfer_mutex);
+	usbDevice[reader_index].polling_transfer = transfer;
+	bool terminate_requested = usbDevice[reader_index].terminate_requested;
+	usbDevice[reader_index].terminate_requested = false;
+	pthread_mutex_unlock(&usbDevice[reader_index].polling_transfer_mutex);
+
+	// The termination might've been requested by the other thread before the
+	// polling_transfer field was written. In that case, we have to cancel the
+	// transfer here as opposed to InterruptStop().
+	if (terminate_requested) {
+		libusb_cancel_transfer(transfer);
+	}
 
 	while (!completed)
 	{
@@ -1526,7 +1620,9 @@ int InterruptRead(int reader_index, int timeout /* in ms */)
 	actual_length = transfer->actual_length;
 	ret = transfer->status;
 
-	atomic_store(&usbDevice[reader_index].polling_transfer, NULL);
+	pthread_mutex_lock(&usbDevice[reader_index].polling_transfer_mutex);
+	usbDevice[reader_index].polling_transfer = NULL;
+	pthread_mutex_unlock(&usbDevice[reader_index].polling_transfer_mutex);
 	libusb_free_transfer(transfer);
 
 	DEBUG_PERIODIC3("after (%d) (%d)", reader_index, ret);
@@ -1534,7 +1630,21 @@ int InterruptRead(int reader_index, int timeout /* in ms */)
 	switch (ret)
 	{
 		case LIBUSB_TRANSFER_COMPLETED:
-			DEBUG_XXD("NotifySlotChange: ", buffer, actual_length);
+			if (actual_length > 0)
+			{
+				switch (buffer[0])
+				{
+					case RDR_to_PC_NotifySlotChange:
+						DEBUG_XXD("NotifySlotChange: ", buffer, actual_length);
+						break;
+					case RDR_to_PC_HardwareError:
+						DEBUG_XXD("HardwareError: ", buffer, actual_length);
+						break;
+					default:
+						DEBUG_XXD("Unrecognized notification: ", buffer, actual_length);
+						break;
+				}
+			}
 			break;
 
 		case LIBUSB_TRANSFER_TIMED_OUT:
@@ -1560,8 +1670,6 @@ int InterruptRead(int reader_index, int timeout /* in ms */)
  ****************************************************************************/
 void InterruptStop(int reader_index)
 {
-	struct libusb_transfer *transfer;
-
 	/* Multislot reader: redirect to Multi_InterrupStop */
 	if (usbDevice[reader_index].multislot_extension != NULL)
 	{
@@ -1569,16 +1677,21 @@ void InterruptStop(int reader_index)
 		return;
 	}
 
-	transfer = atomic_load(&usbDevice[reader_index].polling_transfer);
-	if (transfer)
+	pthread_mutex_lock(&usbDevice[reader_index].polling_transfer_mutex);
+	if (usbDevice[reader_index].polling_transfer)
 	{
 		int ret;
 
-		ret = libusb_cancel_transfer(transfer);
+		ret = libusb_cancel_transfer(usbDevice[reader_index].polling_transfer);
 		if (ret < 0)
 			DEBUG_CRITICAL2("libusb_cancel_transfer failed: %s",
 				libusb_error_name(ret));
+	} else {
+		// Indicate that the next attempt to start an interrupt transfer shouldn't
+		// be proceeded.
+		usbDevice[reader_index].terminate_requested = true;
 	}
+	pthread_mutex_unlock(&usbDevice[reader_index].polling_transfer_mutex);
 } /* InterruptStop */
 
 
@@ -1629,8 +1742,9 @@ static void *Multi_PollingProc(void *p_ext)
 			break;
 		}
 
-		atomic_store(&usbDevice[msExt->reader_index].polling_transfer,
-			transfer);
+		pthread_mutex_lock(&usbDevice[msExt->reader_index].polling_transfer_mutex);
+		usbDevice[msExt->reader_index].polling_transfer = transfer;
+		pthread_mutex_unlock(&usbDevice[msExt->reader_index].polling_transfer_mutex);
 
 		completed = 0;
 		while (!completed && !msExt->terminated)
@@ -1656,8 +1770,9 @@ static void *Multi_PollingProc(void *p_ext)
 			}
 		}
 
-		atomic_store(&usbDevice[msExt->reader_index].polling_transfer,
-			NULL);
+		pthread_mutex_lock(&usbDevice[msExt->reader_index].polling_transfer_mutex);
+		usbDevice[msExt->reader_index].polling_transfer = NULL;
+		pthread_mutex_unlock(&usbDevice[msExt->reader_index].polling_transfer_mutex);
 
 		if (0 == rv)
 		{
@@ -1672,29 +1787,45 @@ static void *Multi_PollingProc(void *p_ext)
 					DEBUG_COMM3("Multi_PollingProc (%d/%d): OK",
 						usbDevice[msExt->reader_index].bus_number,
 						usbDevice[msExt->reader_index].device_address);
-					DEBUG_XXD("NotifySlotChange: ", buffer, actual_length);
-
-					/* log the RDR_to_PC_NotifySlotChange data */
-					slot = 0;
-					for (b=0; b<actual_length-1; b++)
+					if (actual_length > 0)
 					{
-						int s;
-
-						/* 4 slots per byte */
-						for (s=0; s<4; s++)
+						switch (buffer[0])
 						{
-							/* 2 bits per slot */
-							int slot_status = ((buffer[1+b] >> (s*2)) & 3);
-							const char *present, *change;
+							case RDR_to_PC_NotifySlotChange:
+								DEBUG_XXD("NotifySlotChange: ", buffer, actual_length);
 
-							present = (slot_status & 1) ? "present" : "absent";
-							change = (slot_status & 2) ? "status changed" : "no change";
+								/* log the RDR_to_PC_NotifySlotChange data */
+								slot = 0;
+								for (b=0; b<actual_length-1; b++)
+								{
+									int s;
 
-							DEBUG_COMM3("slot %d status: %d",
-								s + slot, slot_status);
-							DEBUG_COMM3("ICC %s, %s", present, change);
+									/* 4 slots per byte */
+									for (s=0; s<4; s++)
+									{
+										/* 2 bits per slot */
+										int slot_status = ((buffer[1+b] >> (s*2)) & 3);
+										const char *present, *change;
+
+										present = (slot_status & 1) ? "present" : "absent";
+										change = (slot_status & 2) ? "status changed" : "no change";
+
+										DEBUG_COMM3("slot %d status: %d",
+											s + slot, slot_status);
+										DEBUG_COMM3("ICC %s, %s", present, change);
+									}
+									slot += 4;
+								}
+								break;
+
+							case RDR_to_PC_HardwareError:
+								DEBUG_XXD("HardwareError: ", buffer, actual_length);
+								break;
+
+							default:
+								DEBUG_XXD("Unrecognized notification: ", buffer, actual_length);
+								break;
 						}
-						slot += 4;
 					}
 					break;
 
@@ -1781,22 +1912,22 @@ end:
  ****************************************************************************/
 static void Multi_PollingTerminate(struct usbDevice_MultiSlot_Extension *msExt)
 {
-	struct libusb_transfer *transfer;
-
 	if (msExt && !msExt->terminated)
 	{
 		msExt->terminated = true;
 
-		transfer = atomic_load(&usbDevice[msExt->reader_index].polling_transfer);
+		pthread_mutex_lock(&usbDevice[msExt->reader_index].polling_transfer_mutex);
 
-		if (transfer)
+		if (usbDevice[msExt->reader_index].polling_transfer)
 		{
 			int ret;
 
-			ret = libusb_cancel_transfer(transfer);
+			ret = libusb_cancel_transfer(usbDevice[msExt->reader_index].polling_transfer);
 			if (ret < 0)
 				DEBUG_CRITICAL2("libusb_cancel_transfer failed: %d", ret);
 		}
+
+		pthread_mutex_unlock(&usbDevice[msExt->reader_index].polling_transfer_mutex);
 	}
 } /* Multi_PollingTerminate */
 
@@ -1811,7 +1942,6 @@ static int Multi_InterruptRead(int reader_index, int timeout /* in ms */)
 	struct usbDevice_MultiSlot_Extension *msExt;
 	unsigned char buffer[CCID_INTERRUPT_SIZE];
 	struct timespec cond_wait_until;
-	struct timeval local_time;
 	int rv, status, interrupt_byte, interrupt_mask;
 
 	msExt = usbDevice[reader_index].multislot_extension;
@@ -1828,10 +1958,11 @@ static int Multi_InterruptRead(int reader_index, int timeout /* in ms */)
 	interrupt_mask = 0x02 << (2 * (usbDevice[reader_index].ccid.bCurrentSlotIndex % 4));
 
 	/* Wait until the condition is signaled or a timeout occurs */
-	gettimeofday(&local_time, NULL);
-	cond_wait_until.tv_sec = local_time.tv_sec;
-	cond_wait_until.tv_nsec = local_time.tv_usec * 1000;
-
+#ifdef HAVE_PTHREAD_CONDATTR_SETCLOCK
+	clock_gettime(CLOCK_MONOTONIC, &cond_wait_until);
+#else
+	clock_gettime(CLOCK_REALTIME, &cond_wait_until);
+#endif
 	cond_wait_until.tv_sec += timeout / 1000;
 	cond_wait_until.tv_nsec += 1000000 * (timeout % 1000);
 
@@ -1863,16 +1994,20 @@ again:
 	/* Not stopped */
 	if (status == LIBUSB_TRANSFER_COMPLETED)
 	{
-		if (0 == (buffer[interrupt_byte] & interrupt_mask))
+		if (buffer[0] == RDR_to_PC_NotifySlotChange
+			&& 0 == (buffer[interrupt_byte] & interrupt_mask))
 		{
-			DEBUG_PERIODIC2("Multi_InterruptRead (%d) -- skipped", reader_index);
+			DEBUG_PERIODIC2("Multi_InterruptRead (%d) -- skipped",
+				reader_index);
 			goto again;
 		}
-		DEBUG_PERIODIC2("Multi_InterruptRead (%d), got an interrupt", reader_index);
+		DEBUG_PERIODIC2("Multi_InterruptRead (%d), got an interrupt",
+			reader_index);
 	}
 	else
 	{
-		DEBUG_PERIODIC3("Multi_InterruptRead (%d), status=%d", reader_index, status);
+		DEBUG_PERIODIC3("Multi_InterruptRead (%d), %s",
+			reader_index, libusb_error_name(status));
 	}
 
 	return status;
@@ -1902,7 +2037,7 @@ static void Multi_InterruptStop(int reader_index)
 
 	pthread_mutex_lock(&msExt->mutex);
 
-	/* Broacast an interrupt to wake-up the slot's thread */
+	/* Broadcast an interrupt to wake-up the slot's thread */
 	msExt->buffer[interrupt_byte] |= interrupt_mask;
 	pthread_cond_broadcast(&msExt->condition);
 
@@ -1947,25 +2082,16 @@ static void *Multi_ReadProc(void *p_ext)
 			if (LIBUSB_ERROR_TIMEOUT == rv)
 				continue;
 
-			if (LIBUSB_ERROR_NO_DEVICE == rv)
-			{
-				DEBUG_INFO4("read failed (%d/%d): %s",
-					usbDevice[reader_index].bus_number,
-					usbDevice[reader_index].device_address,
-					libusb_error_name(rv));
-			}
-			else
-			{
-				DEBUG_CRITICAL4("read failed (%d/%d): %s",
-					usbDevice[reader_index].bus_number,
-					usbDevice[reader_index].device_address,
-					libusb_error_name(rv));
-			}
+			DEBUG_CRITICAL4("read failed (%d/%d): %s",
+				usbDevice[reader_index].bus_number,
+				usbDevice[reader_index].device_address,
+				libusb_error_name(rv));
 
 			/* wait a bit to avoid a fast error loop */
 			(void)usleep(100*1000);
 
-			continue;
+			if (LIBUSB_ERROR_NO_DEVICE != rv)
+				continue;
 		}
 
 #define BSLOT_OFFSET 5
@@ -2017,7 +2143,16 @@ static struct usbDevice_MultiSlot_Extension *Multi_CreateFirstSlot(int reader_in
 
 	/* Create mutex and condition object for the interrupt polling */
 	pthread_mutex_init(&msExt->mutex, NULL);
+#ifdef HAVE_PTHREAD_CONDATTR_SETCLOCK
+	pthread_condattr_t condattr;
+
+	pthread_condattr_init(&condattr);
+	pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC);
+	pthread_cond_init(&msExt->condition, &condattr);
+	pthread_condattr_destroy(&condattr);
+#else
 	pthread_cond_init(&msExt->condition, NULL);
+#endif
 
 	/* concurrent USB read */
 	concurrent = calloc(usbDevice[reader_index].ccid.bMaxSlotIndex +1,
@@ -2032,7 +2167,14 @@ static struct usbDevice_MultiSlot_Extension *Multi_CreateFirstSlot(int reader_in
 	{
 		/* Create mutex and condition object for the concurrent read */
 		pthread_mutex_init(&concurrent[slot].mutex, NULL);
+#ifdef HAVE_PTHREAD_CONDATTR_SETCLOCK
+		pthread_condattr_init(&condattr);
+		pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC);
+		pthread_cond_init(&concurrent[slot].condition, &condattr);
+		pthread_condattr_destroy(&condattr);
+#else
 		pthread_cond_init(&concurrent[slot].condition, NULL);
+#endif
 	}
 	msExt->concurrent = concurrent;
 

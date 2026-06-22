@@ -24,9 +24,7 @@
 #include <stdbool.h>
 
 #include "atr.h"
-#ifdef HAVE_STRING_H
 #include <string.h>
-#endif
 #include "debug.h"
 
 /*
@@ -90,7 +88,7 @@ ATR_InitFromArray (ATR_t * atr, const BYTE atr_buffer[ATR_MAX_SIZE], unsigned le
   /* Extract interface bytes */
   while (pointer < length)
     {
-      /* Check buffer is long enought */
+      /* Check buffer is long enough */
       if (pointer + atr_num_ib_table[(0xF0 & TDi) >> 4] >= length)
 	{
 	  return (ATR_MALFORMED);
