@@ -19,21 +19,11 @@
 
 #include <config.h>
 
-#ifdef HAVE_STDIO_H
 #include <stdio.h>
-#endif
-#ifdef HAVE_STRING_H
 #include <string.h>
-#endif
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-#ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif
-#ifdef HAVE_ARPA_INET_H
 #include <arpa/inet.h>
-#endif
 
 #include "misc.h"
 #include <pcsclite.h>
@@ -52,21 +42,17 @@
 #include "strlcpycat.h"
 #include "sys_generic.h"
 
-#ifdef HAVE_PTHREAD
 #include <pthread.h>
-#endif
 
 /* Array of structures to hold the ATR and other state value of each slot */
 static CcidDesc CcidSlots[CCID_DRIVER_MAX_READERS];
 
 /* global mutex */
-#ifdef HAVE_PTHREAD
 static pthread_mutex_t ifdh_context_mutex = PTHREAD_MUTEX_INITIALIZER;
-#endif
 
-int LogLevel = DEBUG_LEVEL_CRITICAL | DEBUG_LEVEL_INFO;
+_Atomic int LogLevel = DEBUG_LEVEL_CRITICAL | DEBUG_LEVEL_INFO;
 int DriverOptions = 0;
-int PowerOnVoltage = -1;
+static int PowerOnVoltage = -1;
 static bool DebugInitialized = false;
 
 /* local functions */
@@ -80,9 +66,7 @@ static int get_IFSC(ATR_t *atr, int *i);
 
 static void FreeChannel(int reader_index)
 {
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_lock(&ifdh_context_mutex);
-#endif
 
 	(void)ClosePort(reader_index);
 
@@ -91,9 +75,7 @@ static void FreeChannel(int reader_index)
 
 	ReleaseReaderIndex(reader_index);
 
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_unlock(&ifdh_context_mutex);
-#endif
 }
 
 static RESPONSECODE CreateChannelByNameOrChannel(DWORD Lun,
@@ -115,15 +97,11 @@ static RESPONSECODE CreateChannelByNameOrChannel(DWORD Lun,
 		DEBUG_INFO3("Lun: " DWORD_X ", Channel: " DWORD_X, Lun, Channel);
 	}
 
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_lock(&ifdh_context_mutex);
-#endif
 
 	reader_index = GetNewReaderIndex(Lun);
 
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_unlock(&ifdh_context_mutex);
-#endif
 
 	if (-1 == reader_index)
 		return IFD_COMMUNICATION_ERROR;
@@ -259,7 +237,7 @@ EXTERNAL RESPONSECODE IFDHCreateChannel(DWORD Lun, DWORD Channel)
 	 * port listed by Channel.  For example, the first serial reader on
 	 * COM1 would link to /dev/pcsc/1 which would be a sym link to
 	 * /dev/ttyS0 on some machines This is used to help with intermachine
-	 * independance.
+	 * independence.
 	 *
 	 * Once the channel is opened the reader must be in a state in which
 	 * it is possible to query IFDHICCPresence() for card status.
@@ -293,7 +271,7 @@ EXTERNAL RESPONSECODE IFDHCloseChannel(DWORD Lun)
 		Lun);
 
 	/* Restore the default timeout
-	 * No need to wait too long if the reader disapeared */
+	 * No need to wait too long if the reader disappeared */
 	get_ccid_descriptor(reader_index)->readTimeout = DEFAULT_COM_READ_TIMEOUT;
 
 	(void)CmdPowerOff(reader_index);
@@ -433,7 +411,6 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 				*Value = 0;
 			break;
 
-#ifdef HAVE_PTHREAD
 		case TAG_IFD_SIMULTANEOUS_ACCESS:
 			if (*Length >= 1)
 			{
@@ -457,32 +434,17 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 			else
 				return_value = IFD_ERROR_INSUFFICIENT_BUFFER;
 			break;
-#endif
 
 		case TAG_IFD_SLOTS_NUMBER:
 			if (*Length >= 1)
 			{
 				*Length = 1;
-				*Value = 1 + get_ccid_descriptor(reader_index) -> bMaxSlotIndex;
 #ifdef USE_COMPOSITE_AS_MULTISLOT
-				{
-					/* On MacOS X or Linux+libusb we can simulate a
-					 * composite device with 2 CCID interfaces by a
-					 * multi-slot reader */
-					int readerID =  get_ccid_descriptor(reader_index) -> readerID;
-
-					/* 2 CCID interfaces */
-					if ((GEMALTOPROXDU == readerID)
-						|| (GEMALTOPROXSU == readerID)
-						|| (ALCOR_LINK_AK9567 == readerID)
-						|| (ALCOR_LINK_AK9572 == readerID)
-						|| (HID_OMNIKEY_5422 == readerID))
-						*Value = 2;
-
-					/* 4 CCID interfaces */
-					if (FEITIANR502DUAL == readerID)
-						*Value = 4;
-				}
+				/* On MacOS X we can simulate a composite device with 2
+				 * CCID interfaces by a multi-slot reader */
+				*Value = get_ccid_descriptor(reader_index) -> num_interfaces;
+#else
+				*Value = 1 + get_ccid_descriptor(reader_index) -> bMaxSlotIndex;
 #endif
 				DEBUG_INFO2("Reader supports %d slot(s)", *Value);
 			}
@@ -864,7 +826,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 			{
 				/* the reader has no baud rates table */
 				if ((NULL == ccid_desc->arrayOfSupportedDataRates)
-					/* or explicitely support it */
+					/* or explicitly support it */
 					|| find_baud_rate(card_baudrate,
 						ccid_desc->arrayOfSupportedDataRates))
 				{
@@ -917,7 +879,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 							ccid_desc->arrayOfSupportedDataRates))
 							/* or the reader has NO baud rate table */
 							|| ((NULL == ccid_desc->arrayOfSupportedDataRates)
-							/* and the baud rate is bellow the limit */
+							/* and the baud rate is below the limit */
 							&& (card_baudrate <= ccid_desc->dwMaxDataRate)))
 						{
 							pps[1] |= 0x10; /* PTS1 presence */
@@ -956,7 +918,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 
 	/* Automatic PPS made by the ICC? */
 	if ((! (ccid_desc->dwFeatures & CCID_CLASS_AUTO_PPS_CUR))
-		/* TA2 absent: negociable mode */
+		/* TA2 absent: negotiable mode */
 		&& (! atr.ib[1][ATR_INTERFACE_BYTE_TA].present))
 	{
 		int default_protocol;
@@ -1169,7 +1131,7 @@ end:
 			(void)t1_set_param(t1, IFD_PROTOCOL_T1_IFSC, ifsc);
 		}
 
-		/* IFSD not negociated by the reader? */
+		/* IFSD not negotiated by the reader? */
 		if (! (ccid_desc->dwFeatures & CCID_CLASS_AUTO_IFSD))
 		{
 			DEBUG_COMM2("Negotiate IFSD at %d", ccid_desc -> dwMaxIFSD);
@@ -1229,7 +1191,7 @@ EXTERNAL RESPONSECODE IFDHPowerICC(DWORD Lun, DWORD Action,
 
 	unsigned int nlength;
 	RESPONSECODE return_value = IFD_SUCCESS;
-	unsigned char pcbuffer[10+MAX_ATR_SIZE];
+	unsigned char pcbuffer[MAX_ATR_SIZE];
 	int reader_index;
 #ifndef NO_LOG
 	const char *actions[] = { "PowerUp", "PowerDown", "Reset" };
@@ -1260,7 +1222,7 @@ EXTERNAL RESPONSECODE IFDHPowerICC(DWORD Lun, DWORD Action,
 			return_value = CmdPowerOff(reader_index);
 			if (IFD_NO_SUCH_DEVICE == return_value)
 				goto end;
-			if (IFD_SUCCESS != CmdPowerOff(reader_index))
+			if (IFD_SUCCESS != return_value)
 			{
 				DEBUG_CRITICAL("PowerDown failed");
 				return_value = IFD_ERROR_POWER_ACTION;
@@ -1924,6 +1886,72 @@ EXTERNAL RESPONSECODE IFDHControl(DWORD Lun, DWORD dwControlCode,
 		}
 	}
 
+#ifdef ENABLE_MULTIPLE_ENABLED_PROFILES
+	/* Multiple Enabled Profiles (MEP)
+	 * https://source.android.com/docs/core/connect/esim-mep */
+	if (SCARD_CTL_CODE(3600) == dwControlCode)
+	{
+		DEBUG_INFO1("Control command for MEP");
+
+		if (CCID_CLASS_TPDU != (ccid_descriptor->dwFeatures & CCID_CLASS_EXCHANGE_MASK))
+		{
+			DEBUG_INFO1("Reader is NOT in TPDU mode");
+			return_value = IFD_NOT_SUPPORTED;
+		}
+		else
+		{
+			/* Set T=1 NAD */
+			if (TxLength == 4
+				&& (TxBuffer[0] == 0x3E)
+				&& (TxBuffer[1] == 0x00)
+				&& (TxBuffer[2] == 0x01))
+			{
+				RxBuffer[0] = 0x3E;
+				RxBuffer[1] = 0x00;
+				RxBuffer[2] = 0x01;
+				DEBUG_INFO1("Set NAD value");
+				if (t1_set_param(&CcidSlots[reader_index].t1, IFD_PROTOCOL_T1_NAD,
+					TxBuffer[3]))
+					/* error */
+					RxBuffer[3] = 0x01;
+				else
+					RxBuffer[3] = 0x00;
+				*pdwBytesReturned = 4;
+				return_value = IFD_SUCCESS;
+			}
+
+			/* Get T=1 NAD */
+			if (TxLength == 3
+				&& (TxBuffer[0] == 0x3F)
+				&& (TxBuffer[1] == 0x00)
+				&& (TxBuffer[2] == 0x00))
+			{
+				int value = 0;
+
+				RxBuffer[0] = 0x3F;
+				RxBuffer[1] = 0x00;
+				RxBuffer[2] = 0x02;
+				DEBUG_INFO1("Get NAD value");
+				value = t1_get_param(&CcidSlots[reader_index].t1,
+					IFD_PROTOCOL_T1_NAD);
+				if (-1 == value)
+				{
+					/* error */
+					RxBuffer[3] = 0x01;
+					RxBuffer[4] = 0x00;
+				}
+				else
+				{
+					RxBuffer[3] = 0x00;
+					RxBuffer[4] = value;
+				}
+				*pdwBytesReturned = 5;
+				return_value = IFD_SUCCESS;
+			}
+		}
+	}
+#endif
+
 	if (IFD_SUCCESS != return_value)
 		*pdwBytesReturned = 0;
 
@@ -1960,7 +1988,7 @@ EXTERNAL RESPONSECODE IFDHICCPresence(DWORD Lun)
 		&& (ccid_descriptor->IFD_bcdDevice < 0x0200))
 	{
 		/* GemCore SIM Pro firmware 2.00 and up features
-		 * a full independant second slot */
+		 * a full independent second slot */
 		return_value = ccid_descriptor->dwSlotStatus;
 		goto end;
 	}
@@ -2268,7 +2296,7 @@ static unsigned int T1_card_timeout(double f, double d, int TC1,
 	 *   interface device and the last one (NAD PCB LN APDU CKS) = 260 EGT,
 	 * - delay between ISO in and ISO out = BWT,
 	 * - ISO out delay between leading edge of the first character sent by the
-	 *   card and the last one (NAD PCB LN DATAS CKS) = 260 CWT.
+	 *   card and the last one (NAD PCB LN DATA CKS) = 260 CWT.
 	 */
 
 	/* clock_frequency is in kHz so the times are in milliseconds and not
@@ -2290,7 +2318,7 @@ static unsigned int T1_card_timeout(double f, double d, int TC1,
 	BWT = 11 * etu + (1<<BWI) * 960 * 372 / clock_frequency;
 
 	/* card CWT */
-	/* see ch. 9.5.3.1 Caracter Waiting Time, page 20 of ISO 7816-3 */
+	/* see ch. 9.5.3.1 Character Waiting Time, page 20 of ISO 7816-3 */
 	CWT = (11 + (1<<CWI)) * etu;
 
 	timeout = 260*EGT + BWT + 260*CWT;
