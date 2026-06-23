@@ -17,6 +17,11 @@ Authors:
   towitoto driver) in towitoko/ directory.
 - Olaf Kirch for the T=1 TPDU code (from the OpenCT package) in openct/
   directory. I (Ludovic Rousseau) greatly improved this code.
+- and many others
+
+<a href="https://github.com/LudovicRousseau/CCID/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=LudovicRousseau/CCID" />
+</a>
 
 
 CCID and ICCD readers:
@@ -116,6 +121,152 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 History:
 ========
+
+1.6.2 - 19 March 2025, Ludovic Rousseau
+   - Add support of
+     - Arculus AuthentiKey
+     - BHDC Reader-HHD02
+     - CHERRY Smart Terminal 1150
+     - HSIC CCID-Reader
+     - Ledger Flex
+     - SYC USB CCID Reader
+     - Thales RF CR2000
+     - TOKEN2 FIDO2 Security Key(0026)
+   - Give more time to initialize the ACS ACR122U
+   - Do not build examples and contrib by default
+   - meson: add missing check for pthread_condattr_setclock
+   - Don't assume that all notifications are NotifySlotChange
+   - Hide unexported functions and variables
+   - Some other minor improvements
+
+1.6.1 - 5 July 2024, Ludovic Rousseau
+   - fix 'parse' build issues on some systems (pthread & strlcpy)
+   - Some other minor improvements
+
+1.6.0 - 1 June 2024, Ludovic Rousseau
+   - Add support of
+     - Aladdin R.D. JCR SecurBio
+     - AvidCard CAC Smart Card Reader
+     - FujitsuTechnologySolutions GmbH Dual Smartcard Reader D321
+     - Ledger Stax
+     - NXP Pegoda 3
+     - authenton #1- CTAP2.1
+   - provide files for meson build tool (replaces autoconf/automake)
+   - Add possibility to set/get NAD on T=1 for MEP
+   - multi-slots readers
+     - Better handling of reader removal
+     - Use CLOCK_MONOTONIC for timeouts
+   - Some other minor improvements
+
+1.5.5 - 5 January 2024, Ludovic Rousseau
+   - Add support of
+     - Alpha-Project ANGARA Token
+     - Broadcom Corp 58200 (idProduct: 0x5864)
+     - Broadcom Corp 58200 (idProduct: 0x5865)
+     - Imprivata USB CCID
+     - KAPELSE eS-KAP-Ad
+     - Kapelse inSide
+     - KAPELSE KAP-Care
+     - KAPELSE KAP-eCV
+     - KAPELSE KAP-GO
+     - KAPELSE KAP-LINK2
+     - Kapelse KAP-Move
+     - Kapelse Ti-Kap
+     - rf IDEAS USB CCID
+     - SIMHUB pcsc reader
+   - support Kapelse readers on macOS (composite as multislot)
+   - Some other minor improvements
+
+1.5.4 - 29 October 2023, Ludovic Rousseau
+   - fix a regression introduced in 1.5.3
+
+1.5.3 - 25 October 2023, Ludovic Rousseau
+   - Add support of
+     - ACS ACR1552 1S CL Reader
+     - ACS ACR1552 CL Reader
+     - ACS ACR1581
+     - ACS ACR40T ICC Reader
+     - ACS ACR40U ICC Reader
+     - ACS WalletMate 1S CL Reader
+     - Aktiv Rutoken SCR 3101 NFC Reader
+     - CIRIGHT ONE PASS U2F
+     - Dexon Tecnologias Digitais LTDA eSmartDX
+     - Excelsecu Card reader
+     - GHI NC001
+     - Identiv uTrust Token Flex
+     - SpringCard M519 with idProduct: 0x6212
+     - SpringCard M519 with idProduct: 0x621A
+     - WCMi SD5931
+   - parse: create output.bin file
+   - udev: Disable USB-persist for CCID devices
+   - configure: fail if flex is not found
+   - Some other minor improvements
+
+1.5.2 - 31 January 2023, Ludovic Rousseau
+   - Add support of
+     - KAPELSE KAP-LINK
+     - LDU LANDI
+     - Sensyl SSC-HV Reader
+     - TOKEN2 MFA NFC Reader
+     - TOKEN2 Molto2
+     - Thales RF Reader
+   - Alcor Micro AU9560: Remove high speeds since they are not supported
+   - Hack for AlcorMicro AU9560 and Acos-ID card
+   - configure.ac: disable the use of --disable-usbdropdir
+
+1.5.1 - 14 November 2022, Ludovic Rousseau
+   - Add support of
+     - Access IS ATR220 with idProduct: 0x0184
+     - Alcor Link AK9567
+     - Alcor Link AK9572
+     - BLUTRONICS TAURUS NFC
+     - CHERRY SmartTerminal ST-1144
+     - CREATOR CRT-603(CZ1) CCR
+     - Dexon Tecnologias Digitais LTDA DXToken
+     - ESMART Reader ER433x ICC
+     - ESMART Reader ER773x Dual & 1S
+     - Flight system consulting Incredist
+     - Ledger Nano S
+     - Ledger Nano S Plus
+     - Ledger Nano SP
+     - Ledger Nano X
+     - SafeNet eToken Fusion
+     - Sensyl SSC-NFC Reader
+   - Adjust USB drivers path at run-time via environment variable PCSCLITE_HP_DROPDIR
+   - configure.ac: add --enable-strict option
+   - Fix a problem with AUTO PPS readers and ATR convention inverse cards
+   - examples/scardcontrol:
+    - add support of 6A xx error codes
+    - check WinSCard error early
+    - parse wLcdLayout & bEntryValidationCondition
+   - macOS: log non sensitive strings as "%{public}s"
+   - Some other minor improvements
+
+1.5.0 - 27 January 2022, Ludovic Rousseau
+   - Add support of
+     - ACS ACR1281U
+     - Circle CCR7125 ICC
+     - Circle CIR125 ICC
+     - Circle CIR125-DOT ICC
+     - Circle CIR215 CL with iProduct 0x2100
+     - Circle CIR315 DI
+     - Circle CIR315 with idProduct: 0x0324
+     - Circle CIR315 with idProduct: 0x7004
+     - Circle CIR415 CL
+     - Circle CIR515 ICC
+     - Circle CIR615 CL
+     - Circle CIR615 CL & 1S
+     - ELYCTIS CL reader
+     - Nitrokey Nitrokey 3
+     - Thales Shield M4 Reader
+   - Add support of simultaneous slot access on multi slots readers
+   - Use FeliCa instead of Felica on SONY request
+   - Fix SafeNet eToken 5110 SC issue
+   - Allow vendor control commands for Omnikey 5427 CK
+   - always compute readTimeout to use a value greater than default 3 seconds
+   - Check the bSeq value when receiving a CCID frame
+   - Avoid logging errors when a reader is removed
+   - Some other minor improvements
 
 1.4.36 - 30 August 2021, Ludovic Rousseau
    - Add support of
@@ -402,7 +553,7 @@ History:
      - Gemalto K50
      - appidkey GmbH ID100-USB  SC Reader
      - appidkey GmbH ID50 -USB
-   - Remove suport of
+   - Remove support of
      - Broadcom Corp 5880 (idProduct: 0x5800)
      - Broadcom Corp 5880 (idProduct: 0x5805)
      - KEBTechnology KONA USB SmartCard
@@ -618,7 +769,7 @@ History:
      - Watchdata W5181
    - Add support of DRIVER_OPTION_DISABLE_PIN_RETRIES
       The Gemalto pinpad reader sends a VERIFY command with no PIN value
-      in order to retreive the remaining retries from the card.  Some
+      in order to retrieve the remaining retries from the card.  Some
       cards (like the OpenPGP card) do not support this.
       It is now possible to disable this behavior from the Gemalto
       Pinpad and Covadis Véga Alpha.
@@ -674,7 +825,7 @@ History:
    - Add support of Windows value for CM_IOCTL_GET_FEATURE_REQUEST
       Windows uses 0x313520 for SCARD_CTL_CODE(3400) pcsc-lite uses
       0x42000D48 for SCARD_CTL_CODE(3400)
-      RDP aplications (like rdesktop) will convert SCardControl()
+      RDP applications (like rdesktop) will convert SCardControl()
       commands from a Windows application (so using 0x313520) to
       pcsc-lite.
    - fix multi-slot support for card movement notification (introduced
@@ -840,8 +991,8 @@ History:
       InterFace Device i.e. the smart card reader.  We then return the
       USB iManufacturer string as SCARD_ATTR_VENDOR_NAME and USB
       bcdDevice as SCARD_ATTR_VENDOR_IFD_VERSION
-   - reduce binary size bu removing unused features from simclist
-   - Fix some warnings reported bu Coverity
+   - reduce binary size by removing unused features from simclist
+   - Fix some warnings reported by Coverity
 
 
 1.4.4 - 13 May 2011, Ludovic Rousseau
@@ -1283,7 +1434,7 @@ History:
    - some (bogus) cards require an extra EGT but the ATR does not say
       so. We try to detect the bogus cards and set TC1=2
    - IFDHSetProtocolParameters(): only use a data rate supported by the
-      reader in the PPS negociation, otherwise we stay at the default
+      reader in the PPS negotiation, otherwise we stay at the default
       speed.
    - calculate and store the read timeout according to the card ATR
       instead of using a fixed value of 60 seconds
@@ -1409,7 +1560,7 @@ History:
    - build but do not install the serial ccidtwin driver by default
       since it is useless on computers without a serial port or without
       this reader for example.
-   - read and write timeouts are not symmetric. write timout can be
+   - read and write timeouts are not symmetric. write timeout can be
       shorter since the reader and card is not supposed to do anything
       before receiving (write) a command
    - do not try to find usb.h and other libusb files if
@@ -1442,7 +1593,7 @@ History:
    - honor DESTDIR in install rules (closes [ #300110 ]). Thanks to
       Ville Skyttä for the patch.
    - src/ccid.c: do not switch the GemPC Key and GemPC Twin in APDU
-      mode since it also swicth in EMV mode and may not work with non
+      mode since it also switch in EMV mode and may not work with non
       EMV cards
    - src/ccid_serial.c: complete reimplementation of the Twin serial
       protocol using a finite state automata (code much simpler)

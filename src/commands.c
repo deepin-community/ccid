@@ -20,18 +20,11 @@
 
 #include <config.h>
 
-#ifdef HAVE_STRING_H
+#include <stdbool.h>
 #include <string.h>
-#endif
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-#ifdef HAVE_ERRNO_H
 #include <errno.h>
-#endif
-#ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif
 
 #include <pcsclite.h>
 #include <ifdhandler.h>
@@ -95,9 +88,11 @@ RESPONSECODE CmdPowerOn(unsigned int reader_index, unsigned int * nlength,
 	unsigned char buffer[], int voltage)
 {
 	unsigned char cmd[10];
+	unsigned char resp[10 + MAX_ATR_SIZE];
+	int bSeq;
 	status_t res;
-	int length, count = 1;
-	unsigned int atr_len;
+	int count = 1;
+	unsigned int atr_len, length;
 	int init_voltage;
 	RESPONSECODE return_value = IFD_SUCCESS;
 	_ccid_descriptor *ccid_descriptor = get_ccid_descriptor(reader_index);
@@ -182,12 +177,9 @@ RESPONSECODE CmdPowerOn(unsigned int reader_index, unsigned int * nlength,
 	}
 #endif
 
-	/* store length of buffer[] */
-	length = *nlength;
-
 	if ((ccid_descriptor->dwFeatures & CCID_CLASS_AUTO_VOLTAGE)
 		|| (ccid_descriptor->dwFeatures & CCID_CLASS_AUTO_ACTIVATION))
-		voltage = 0;	/* automatic voltage selection */
+		voltage = VOLTAGE_AUTO;	/* automatic voltage selection */
 	else
 	{
 		int bVoltageSupport = ccid_descriptor->bVoltageSupport;
@@ -196,19 +188,19 @@ check_again:
 		if ((1 == voltage) && !(bVoltageSupport & 1))
 		{
 			DEBUG_INFO1("5V requested but not supported by reader");
-			voltage = 2;	/* 3V */
+			voltage = VOLTAGE_3V;	/* 3V */
 		}
 
 		if ((2 == voltage) && !(bVoltageSupport & 2))
 		{
 			DEBUG_INFO1("3V requested but not supported by reader");
-			voltage = 3;	/* 1.8V */
+			voltage = VOLTAGE_1_8V;	/* 1.8V */
 		}
 
 		if ((3 == voltage) && !(bVoltageSupport & 4))
 		{
 			DEBUG_INFO1("1.8V requested but not supported by reader");
-			voltage = 1;	/* 5V */
+			voltage = VOLTAGE_5V;	/* 5V */
 
 			/* do not (infinite) loop if bVoltageSupport == 0 */
 			if (bVoltageSupport)
@@ -218,34 +210,33 @@ check_again:
 	init_voltage = voltage;
 
 again:
-	cmd[0] = 0x62; /* IccPowerOn */
+	bSeq = (*ccid_descriptor->pbSeq)++;
+	cmd[0] = PC_to_RDR_IccPowerOn;
 	cmd[1] = cmd[2] = cmd[3] = cmd[4] = 0;	/* dwLength */
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
-	cmd[6] = (*ccid_descriptor->pbSeq)++;
+	cmd[6] = bSeq;
 	cmd[7] = voltage;
 	cmd[8] = cmd[9] = 0; /* RFU */
 
 	res = WritePort(reader_index, sizeof(cmd), cmd);
 	CHECK_STATUS(res)
 
-	/* reset available buffer size */
-	/* needed if we go back after a switch to ISO mode */
-	*nlength = length;
+	length = sizeof resp;
 
-	res = ReadPort(reader_index, nlength, buffer);
+	res = ReadPort(reader_index, &length, resp, bSeq);
 	CHECK_STATUS(res)
 
-	if (*nlength < CCID_RESPONSE_HEADER_SIZE)
+	if (length < CCID_RESPONSE_HEADER_SIZE)
 	{
-		DEBUG_CRITICAL2("Not enough data received: %d bytes", *nlength);
+		DEBUG_CRITICAL2("Not enough data received: %d bytes", length);
 		return IFD_COMMUNICATION_ERROR;
 	}
 
-	if (buffer[STATUS_OFFSET] & CCID_COMMAND_FAILED)
+	if (resp[STATUS_OFFSET] & CCID_COMMAND_FAILED)
 	{
-		ccid_error(PCSC_LOG_ERROR, buffer[ERROR_OFFSET], __FILE__, __LINE__, __FUNCTION__);	/* bError */
+		ccid_error(PCSC_LOG_ERROR, resp[ERROR_OFFSET], __FILE__, __LINE__, __FUNCTION__);	/* bError */
 
-		if (0xBB == buffer[ERROR_OFFSET] &&	/* Protocol error in EMV mode */
+		if (0xBB == resp[ERROR_OFFSET] &&	/* Protocol error in EMV mode */
 			((GEMPC433 == ccid_descriptor->readerID)
 			|| (CHERRYXX33 == ccid_descriptor->readerID)))
 		{
@@ -288,14 +279,13 @@ again:
 	}
 
 	/* extract the ATR */
-	atr_len = dw2i(buffer, 1);	/* ATR length */
-	if (atr_len > *nlength - 10)
-		atr_len = *nlength - 10;
-	else
-		*nlength = atr_len;
+	atr_len = dw2i(resp, 1);	/* ATR length */
+	if (atr_len > *nlength)
+		atr_len = *nlength;
 
-	/* the buffer length should be 10 + MAX_ATR_SIZE */
-	memmove(buffer, buffer+10, atr_len);
+	*nlength = atr_len;
+
+	memcpy(buffer, resp+10, atr_len);
 
 	return return_value;
 } /* CmdPowerOn */
@@ -321,7 +311,7 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 	uint32_t ulDataLength;
 
 	pvs = (PIN_VERIFY_STRUCTURE *)TxBuffer;
-	cmd[0] = 0x69;	/* Secure */
+	cmd[0] = PC_to_RDR_Secure;
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
 	cmd[6] = (*ccid_descriptor->pbSeq)++;
 	cmd[7] = 0;		/* bBWI */
@@ -360,7 +350,7 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 	 * The Cherry XX44 reader crashes with a wrong value */
 	if ((0x00 == TxBuffer[7]) || (TxBuffer[7] > 0x07))
 	{
-		DEBUG_INFO2("Correct bEntryValidationCondition (was 0x%02X)",
+		DEBUG_INFO2("Fix bEntryValidationCondition (was 0x%02X)",
 			TxBuffer[7]);
 		TxBuffer[7] = 0x02;
 	}
@@ -374,16 +364,16 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 		 * CCID message. The only value supported is 01h (display 1 message) */
 		if (0x01 != TxBuffer[8])
 		{
-			DEBUG_INFO2("Correct bNumberMessage for GemPC Pinpad (was %d)",
+			DEBUG_INFO2("Fix bNumberMessage for GemPC Pinpad (was %d)",
 				TxBuffer[8]);
 			TxBuffer[8] = 0x01;
 		}
 
 		/* The reader does not support, and actively reject, "max size reached"
-		 * and "timeout occured" validation conditions */
+		 * and "timeout occurred" validation conditions */
 		if (0x02 != TxBuffer[7])
 		{
-			DEBUG_INFO2("Correct bEntryValidationCondition for GemPC Pinpad (was %d)",
+			DEBUG_INFO2("Fix bEntryValidationCondition for GemPC Pinpad (was %d)",
 				TxBuffer[7]);
 			TxBuffer[7] = 0x02;	/* validation key pressed */
 		}
@@ -396,7 +386,7 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 		int bEntryValidationCondition = ccid_descriptor->gemalto_firmware_features->bEntryValidationCondition;
 		if (TxBuffer[7] & ~bEntryValidationCondition)
 		{
-			DEBUG_INFO2("Correct bEntryValidationCondition (was 0x%02X)",
+			DEBUG_INFO2("Fix bEntryValidationCondition (was 0x%02X)",
 				TxBuffer[7]);
 			TxBuffer[7] &= bEntryValidationCondition;
 		}
@@ -409,7 +399,7 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 		 * CCID message. The only value supported is 00h (no message) */
 		if (0x00 != TxBuffer[8])
 		{
-			DEBUG_INFO2("Correct bNumberMessage for Dell keyboard (was %d)",
+			DEBUG_INFO2("Fix bNumberMessage for Dell keyboard (was %d)",
 				TxBuffer[8]);
 			TxBuffer[8] = 0x00;
 		}
@@ -427,7 +417,7 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 		tmp = TxBuffer[6];
 		TxBuffer[6] = TxBuffer[5];
 		TxBuffer[5] = tmp;
-		DEBUG_INFO1("Correcting wPINMaxExtraDigit for Dell keyboard");
+		DEBUG_INFO1("Fix wPINMaxExtraDigit for Dell keyboard");
 	}
 #endif
 
@@ -560,12 +550,10 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 				unsigned char sblk[1]; /* we only need 1 byte of data */
 				t1_state_t *t1 = &get_ccid_slot(reader_index)->t1;
 				unsigned int slen;
-				int oldReadTimeout;
 
 				DEBUG_COMM2("CT sent S-block with wtx=%u", RxBuffer[DATA]);
 				t1->wtx = RxBuffer[DATA];
 
-				oldReadTimeout = ccid_descriptor->readTimeout;
 				if (t1->wtx > 1)
 				{
 					/* set the new temporary timeout at WTX card request */
@@ -584,16 +572,20 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 
 				ret = CCID_Transmit(t1 -> lun, slen, RxBuffer, 0, t1->wtx);
 				if (ret != IFD_SUCCESS)
-					return ret;
+					goto end;
 
 				/* I guess we have at least 6 bytes in RxBuffer */
 				*RxLength = 6;
 				ret = CCID_Receive(reader_index, RxLength, RxBuffer, NULL);
 				if (ret != IFD_SUCCESS)
-					return ret;
+					goto end;
+			}
 
-				/* Restore initial timeout */
-				ccid_descriptor->readTimeout = oldReadTimeout;
+			/* this should not happen. It will make coverity happy */
+			if (*RxLength < 4)
+			{
+				ret = IFD_COMMUNICATION_ERROR;
+				goto end;
 			}
 
 			/* get only the T=1 data */
@@ -603,7 +595,9 @@ RESPONSECODE SecurePINVerify(unsigned int reader_index,
 	}
 
 end:
+	/* Restore initial timeout */
 	ccid_descriptor -> readTimeout = old_read_timeout;
+
 	return ret;
 } /* SecurePINVerify */
 
@@ -669,7 +663,7 @@ RESPONSECODE SecurePINModify(unsigned int reader_index,
 	uint32_t ulDataLength;
 
 	pms = (PIN_MODIFY_STRUCTURE *)TxBuffer;
-	cmd[0] = 0x69;	/* Secure */
+	cmd[0] = PC_to_RDR_Secure;
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
 	cmd[6] = (*ccid_descriptor->pbSeq)++;
 	cmd[7] = 0;		/* bBWI */
@@ -717,7 +711,7 @@ RESPONSECODE SecurePINModify(unsigned int reader_index,
 	 * The Cherry XX44 reader crashes with a wrong value */
 	if ((0x00 == TxBuffer[10]) || (TxBuffer[10] > 0x07))
 	{
-		DEBUG_INFO2("Correct bEntryValidationCondition (was 0x%02X)",
+		DEBUG_INFO2("Fix bEntryValidationCondition (was 0x%02X)",
 			TxBuffer[10]);
 		TxBuffer[10] = 0x02;
 	}
@@ -750,10 +744,10 @@ RESPONSECODE SecurePINModify(unsigned int reader_index,
 		|| (VEGAALPHA == ccid_descriptor->readerID))
 	{
 		/* The reader does not support, and actively reject, "max size reached"
-		 * and "timeout occured" validation conditions */
+		 * and "timeout occurred" validation conditions */
 		if (0x02 != TxBuffer[10])
 		{
-			DEBUG_INFO2("Correct bEntryValidationCondition for GemPC Pinpad (was %d)",
+			DEBUG_INFO2("Fix bEntryValidationCondition for GemPC Pinpad (was %d)",
 				TxBuffer[10]);
 			TxBuffer[10] = 0x02;	/* validation key pressed */
 		}
@@ -765,7 +759,7 @@ RESPONSECODE SecurePINModify(unsigned int reader_index,
 		int bEntryValidationCondition = ccid_descriptor->gemalto_firmware_features->bEntryValidationCondition;
 		if (TxBuffer[10] & ~bEntryValidationCondition)
 		{
-			DEBUG_INFO2("Correct bEntryValidationCondition (was 0x%02X)",
+			DEBUG_INFO2("Fix bEntryValidationCondition (was 0x%02X)",
 				TxBuffer[10]);
 			TxBuffer[10] &= bEntryValidationCondition;
 		}
@@ -783,7 +777,7 @@ RESPONSECODE SecurePINModify(unsigned int reader_index,
 		bNumberMessage = TxBuffer[11];
 		if (0x03 != TxBuffer[11])
 		{
-			DEBUG_INFO2("Correct bNumberMessage for GemPC Pinpad (was %d)",
+			DEBUG_INFO2("Fix bNumberMessage for GemPC Pinpad (was %d)",
 				TxBuffer[11]);
 			TxBuffer[11] = 0x03; /* 3 messages */
 		}
@@ -796,7 +790,7 @@ RESPONSECODE SecurePINModify(unsigned int reader_index,
 		 * command. Change it to 0xff which is accepted. */
 		if (0x00 == TxBuffer[11])
 		{
-			DEBUG_INFO1("Correct bNumberMessage for Cherry KC 1000 SC (was 0)");
+			DEBUG_INFO1("Fix bNumberMessage for Cherry KC 1000 SC (was 0)");
 			TxBuffer[11] = 0xff;
 		}
 	}
@@ -932,7 +926,7 @@ RESPONSECODE CmdEscape(unsigned int reader_index,
 	unsigned char RxBuffer[], unsigned int *RxLength, unsigned int timeout)
 {
 	return CmdEscapeCheck(reader_index, TxBuffer, TxLength, RxBuffer, RxLength,
-		timeout, FALSE);
+		timeout, false);
 } /* CmdEscape */
 
 
@@ -944,13 +938,14 @@ RESPONSECODE CmdEscape(unsigned int reader_index,
 RESPONSECODE CmdEscapeCheck(unsigned int reader_index,
 	const unsigned char TxBuffer[], unsigned int TxLength,
 	unsigned char RxBuffer[], unsigned int *RxLength, unsigned int timeout,
-	int mayfail)
+	bool mayfail)
 {
 	unsigned char *cmd_in, *cmd_out;
+	int bSeq;
 	status_t res;
 	unsigned int length_in, length_out;
 	RESPONSECODE return_value = IFD_SUCCESS;
-	int old_read_timeout;
+	int old_read_timeout = -1;
 	_ccid_descriptor *ccid_descriptor = get_ccid_descriptor(reader_index);
 
 	/* a value of 0 do not change the default read timeout */
@@ -977,10 +972,11 @@ again:
 		goto end;
 	}
 
-	cmd_in[0] = 0x6B; /* PC_to_RDR_Escape */
+	bSeq = (*ccid_descriptor->pbSeq)++;
+	cmd_in[0] = PC_to_RDR_Escape;
 	i2dw(length_in - 10, cmd_in+1);	/* dwLength */
 	cmd_in[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
-	cmd_in[6] = (*ccid_descriptor->pbSeq)++;
+	cmd_in[6] = bSeq;
 	cmd_in[7] = cmd_in[8] = cmd_in[9] = 0; /* RFU */
 
 	/* copy the command */
@@ -1000,7 +996,7 @@ again:
 
 time_request:
 	length_out = 10 + *RxLength;
-	res = ReadPort(reader_index, &length_out, cmd_out);
+	res = ReadPort(reader_index, &length_out, cmd_out, bSeq);
 
 	/* replay the command if NAK
 	 * This (generally) happens only for the first command sent to the reader
@@ -1072,6 +1068,7 @@ end:
 RESPONSECODE CmdPowerOff(unsigned int reader_index)
 {
 	unsigned char cmd[10];
+	int bSeq;
 	status_t res;
 	unsigned int length;
 	RESPONSECODE return_value = IFD_SUCCESS;
@@ -1124,17 +1121,18 @@ RESPONSECODE CmdPowerOff(unsigned int reader_index)
 	}
 #endif
 
-	cmd[0] = 0x63; /* IccPowerOff */
+	bSeq = (*ccid_descriptor->pbSeq)++;
+	cmd[0] = PC_to_RDR_IccPowerOff;
 	cmd[1] = cmd[2] = cmd[3] = cmd[4] = 0;	/* dwLength */
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
-	cmd[6] = (*ccid_descriptor->pbSeq)++;
+	cmd[6] = bSeq;
 	cmd[7] = cmd[8] = cmd[9] = 0; /* RFU */
 
 	res = WritePort(reader_index, sizeof(cmd), cmd);
 	CHECK_STATUS(res)
 
 	length = sizeof(cmd);
-	res = ReadPort(reader_index, &length, cmd);
+	res = ReadPort(reader_index, &length, cmd, bSeq);
 	CHECK_STATUS(res)
 
 	if (length < CCID_RESPONSE_HEADER_SIZE)
@@ -1161,6 +1159,7 @@ RESPONSECODE CmdPowerOff(unsigned int reader_index)
 RESPONSECODE CmdGetSlotStatus(unsigned int reader_index, unsigned char buffer[])
 {
 	unsigned char cmd[10];
+	int bSeq;
 	status_t res;
 	unsigned int length;
 	RESPONSECODE return_value = IFD_SUCCESS;
@@ -1240,24 +1239,26 @@ again_status:
 		}
 		return IFD_SUCCESS;
 	}
-#endif
 
 #ifdef __APPLE__
 	if (MICROCHIP_SEC1100 == ccid_descriptor->readerID)
 		InterruptRead(reader_index, 10);
 #endif
 
-	cmd[0] = 0x65; /* GetSlotStatus */
+#endif
+
+	bSeq = (*ccid_descriptor->pbSeq)++;
+	cmd[0] = PC_to_RDR_GetSlotStatus;
 	cmd[1] = cmd[2] = cmd[3] = cmd[4] = 0;	/* dwLength */
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
-	cmd[6] = (*ccid_descriptor->pbSeq)++;
+	cmd[6] = bSeq;
 	cmd[7] = cmd[8] = cmd[9] = 0; /* RFU */
 
 	res = WritePort(reader_index, sizeof(cmd), cmd);
 	CHECK_STATUS(res)
 
 	length = SIZE_GET_SLOT_STATUS;
-	res = ReadPort(reader_index, &length, buffer);
+	res = ReadPort(reader_index, &length, buffer, bSeq);
 	CHECK_STATUS(res)
 
 	if (length < CCID_RESPONSE_HEADER_SIZE)
@@ -1390,7 +1391,7 @@ RESPONSECODE CCID_Transmit(unsigned int reader_index, unsigned int tx_length,
 	}
 #endif
 
-	cmd[0] = 0x6F; /* XfrBlock */
+	cmd[0] = PC_to_RDR_XfrBlock;
 	i2dw(tx_length, cmd+1);	/* APDU length */
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
 	cmd[6] = (*ccid_descriptor->pbSeq)++;
@@ -1546,7 +1547,7 @@ time_request_ICCD_B:
 
 time_request:
 	length = sizeof(cmd);
-	ret = ReadPort(reader_index, &length, cmd);
+	ret = ReadPort(reader_index, &length, cmd, -1);
 
 	/* restore the original value of read timeout */
 	ccid_descriptor -> readTimeout = old_timeout;
@@ -2039,10 +2040,14 @@ static RESPONSECODE T0ProcSW1(unsigned int reader_index,
 		in_buf = tmp_buf;
 	}
 	sw2 = *rcv_buf = *in_buf;
-	in_len--;
 	(*rcv_len)++;
 
+#ifdef NO_LOG
+	(void)sw1;
+	(void)sw2;
+#else
 	DEBUG_COMM3("Exit: SW=%02X %02X", sw1, sw2);
+#endif
 
 	return return_value;
 } /* T0ProcSW1 */
@@ -2134,7 +2139,7 @@ static RESPONSECODE CmdXfrBlockCHAR_T0(unsigned int reader_index,
 		if (0x20 == pcbuffer[0])
 		{
 			/* backup apdu data length */
-			/* if no data recieved before - backup length must be zero */
+			/* if no data received before - backup length must be zero */
 			backup_len = (backup_len == *rcv_len) ? 0 : *rcv_len;
 
 			/* wait for 2 bytes (SW1-SW2) */
@@ -2145,7 +2150,7 @@ static RESPONSECODE CmdXfrBlockCHAR_T0(unsigned int reader_index,
 			if (return_value != IFD_SUCCESS)
 				DEBUG_CRITICAL("CCID_Receive failed");
 
-			/* restore recieved length */
+			/* restore received length */
 			*rcv_len += backup_len;
 		}
 		return return_value;
@@ -2283,7 +2288,8 @@ static RESPONSECODE CmdXfrBlockTPDU_T1(unsigned int reader_index,
 
 	DEBUG_COMM3("T=1: %d and %d bytes", tx_length, *rx_length);
 
-	ret = t1_transceive(&((get_ccid_slot(reader_index)) -> t1), 0,
+	ret = t1_transceive(&((get_ccid_slot(reader_index)) -> t1),
+		get_ccid_slot(reader_index) -> t1.nad,
 		tx_buffer, tx_length, rx_buffer, *rx_length);
 
 	if (ret < 0)
@@ -2303,16 +2309,18 @@ static RESPONSECODE CmdXfrBlockTPDU_T1(unsigned int reader_index,
 RESPONSECODE SetParameters(unsigned int reader_index, char protocol,
 	unsigned int length, unsigned char buffer[])
 {
-	unsigned char cmd[10+length];	/* CCID + APDU buffer */
+	unsigned char cmd[10+length+2];	/* CCID + Protocol Data Structure */
+	int bSeq;
 	_ccid_descriptor *ccid_descriptor = get_ccid_descriptor(reader_index);
 	status_t res;
 
 	DEBUG_COMM2("length: %d bytes", length);
 
-	cmd[0] = 0x61; /* SetParameters */
+	bSeq = (*ccid_descriptor->pbSeq)++;
+	cmd[0] = PC_to_RDR_SetParameters;
 	i2dw(length, cmd+1);	/* APDU length */
 	cmd[5] = ccid_descriptor->bCurrentSlotIndex;	/* slot number */
-	cmd[6] = (*ccid_descriptor->pbSeq)++;
+	cmd[6] = bSeq;
 	cmd[7] = protocol;	/* bProtocolNum */
 	cmd[8] = cmd[9] = 0; /* RFU */
 
@@ -2322,7 +2330,7 @@ RESPONSECODE SetParameters(unsigned int reader_index, char protocol,
 	CHECK_STATUS(res)
 
 	length = sizeof(cmd);
-	res = ReadPort(reader_index, &length, cmd);
+	res = ReadPort(reader_index, &length, cmd, bSeq);
 	CHECK_STATUS(res)
 
 	if (length < CCID_RESPONSE_HEADER_SIZE)
@@ -2374,7 +2382,7 @@ static void i2dw(int value, unsigned char buffer[])
 
 /*****************************************************************************
 *
-*					bei2i (big endian integer to host order interger)
+*					bei2i (big endian integer to host order integer)
 *
 ****************************************************************************/
 

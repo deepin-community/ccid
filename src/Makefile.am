@@ -12,6 +12,7 @@ lib_LTLIBRARIES += libccid.la
 LIBS_TO_INSTALL += install_ccid
 LIBS_TO_UNINSTALL += uninstall_ccid
 noinst_PROGRAMS = parse
+noinst_DATA = Info.plist
 endif
 if WITH_TWIN_SERIAL
 lib_LTLIBRARIES += libccidtwin.la
@@ -27,6 +28,8 @@ COMMON = ccid.c \
 	debug.h \
 	defs.h \
 	ifdhandler.c \
+	sys_generic.h \
+	sys_unix.c \
 	utils.c \
 	utils.h
 USB = ccid_usb.c ccid_usb.h
@@ -66,9 +69,9 @@ libccidtwin_la_CFLAGS = $(PCSC_CFLAGS) $(PTHREAD_CFLAGS) $(SYMBOL_VISIBILITY) \
 libccidtwin_la_LIBADD = $(PTHREAD_LIBS)
 libccidtwin_la_LDFLAGS = -avoid-version
 
-parse_SOURCES = parse.c debug.c ccid_usb.c $(TOKEN_PARSER)
-parse_LDADD = $(LIBUSB_LIBS)
-parse_CFLAGS = $(PCSC_CFLAGS) $(LIBUSB_CFLAGS) -DSIMCLIST_NO_DUMPRESTORE
+parse_SOURCES = parse.c debug.c ccid_usb.c sys_unix.c $(TOKEN_PARSER)
+parse_LDADD = $(LIBUSB_LIBS) $(ZLIB_LIBS)
+parse_CFLAGS = $(PCSC_CFLAGS) $(LIBUSB_CFLAGS) $(ZLIB_CFLAGS) -DSIMCLIST_NO_DUMPRESTORE
 
 EXTRA_DIST = Info.plist.src create_Info_plist.pl reader.conf.in \
 	towitoko/COPYING towitoko/README openct/LICENSE openct/README \
@@ -83,7 +86,7 @@ INSTALL_UDEV_RULE_FILE=@/bin/echo "***************" ; echo "copy the src/92_pcsc
 Info.plist: Info.plist.src $(srcdir)/../readers/supported_readers.txt
 	$(srcdir)/create_Info_plist.pl $(srcdir)/../readers/supported_readers.txt $(srcdir)/Info.plist.src --target=$(CCID_LIB) --version=$(VERSION) $(NOCLASS) > Info.plist
 
-DISTCLEANFILES = tokenparser.c Info.plist
+CLEANFILES = tokenparser.c Info.plist
 
 install_ccid: libccid.la Info.plist
 	$(mkinstalldirs) "$(DESTDIR)$(usbdropdir)/$(CCID_BUNDLE)/Contents/$(BUNDLE_HOST)/"
@@ -95,10 +98,10 @@ install_ccidtwin: libccidtwin.la
 	$(mkinstalldirs) "$(DESTDIR)$(ccidtwindir)"
 	cp .libs/$(CCIDTWIN_LIB) "$(DESTDIR)$(ccidtwindir)/$(CCIDTWIN_LIB)"
 	$(mkinstalldirs) "$(DESTDIR)/$(serialconfdir)" ; \
-		perl -ne "s|TARGET|$(ccidtwindir)/$(CCIDTWIN_LIB)| ; print" $(srcdir)/reader.conf.in > "$(DESTDIR)/$(serialconfdir)/libccidtwin"
+		perl -ne "s|@TARGET@|$(ccidtwindir)/$(CCIDTWIN_LIB)| ; print" $(srcdir)/reader.conf.in > "$(DESTDIR)/$(serialconfdir)/libccidtwin"
 
 # do not uninstall the serial driver by default
-# use explicitely 'make uninstall_ccidtwin'
+# use explicitly 'make uninstall_ccidtwin'
 uninstall: $(LIBS_TO_UNINSTALL)
 
 uninstall_ccid:

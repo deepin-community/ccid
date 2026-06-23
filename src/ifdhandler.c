@@ -19,21 +19,11 @@
 
 #include <config.h>
 
-#ifdef HAVE_STDIO_H
 #include <stdio.h>
-#endif
-#ifdef HAVE_STRING_H
 #include <string.h>
-#endif
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-#ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#endif
-#ifdef HAVE_ARPA_INET_H
 #include <arpa/inet.h>
-#endif
 
 #include "misc.h"
 #include <pcsclite.h>
@@ -50,27 +40,24 @@
 #include "towitoko/pps.h"
 #include "parser.h"
 #include "strlcpycat.h"
+#include "sys_generic.h"
 
-#ifdef HAVE_PTHREAD
 #include <pthread.h>
-#endif
 
 /* Array of structures to hold the ATR and other state value of each slot */
 static CcidDesc CcidSlots[CCID_DRIVER_MAX_READERS];
 
 /* global mutex */
-#ifdef HAVE_PTHREAD
 static pthread_mutex_t ifdh_context_mutex = PTHREAD_MUTEX_INITIALIZER;
-#endif
 
-int LogLevel = DEBUG_LEVEL_CRITICAL | DEBUG_LEVEL_INFO;
+_Atomic int LogLevel = DEBUG_LEVEL_CRITICAL | DEBUG_LEVEL_INFO;
 int DriverOptions = 0;
-int PowerOnVoltage = -1;
-static int DebugInitialized = FALSE;
+static int PowerOnVoltage = -1;
+static bool DebugInitialized = false;
 
 /* local functions */
 static void init_driver(void);
-static char find_baud_rate(unsigned int baudrate, unsigned int *list);
+static bool find_baud_rate(unsigned int baudrate, unsigned int *list);
 static unsigned int T0_card_timeout(double f, double d, int TC1, int TC2,
 	int clock_frequency);
 static unsigned int T1_card_timeout(double f, double d, int TC1, int BWI,
@@ -79,9 +66,7 @@ static int get_IFSC(ATR_t *atr, int *i);
 
 static void FreeChannel(int reader_index)
 {
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_lock(&ifdh_context_mutex);
-#endif
 
 	(void)ClosePort(reader_index);
 
@@ -90,9 +75,7 @@ static void FreeChannel(int reader_index)
 
 	ReleaseReaderIndex(reader_index);
 
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_unlock(&ifdh_context_mutex);
-#endif
 }
 
 static RESPONSECODE CreateChannelByNameOrChannel(DWORD Lun,
@@ -107,22 +90,18 @@ static RESPONSECODE CreateChannelByNameOrChannel(DWORD Lun,
 
 	if (lpcDevice)
 	{
-		DEBUG_INFO3("Lun: " DWORD_X ", device: %s", Lun, lpcDevice);
+		DEBUG_INFO3("Lun: " DWORD_X ", device: " LOG_STRING, Lun, lpcDevice);
 	}
 	else
 	{
 		DEBUG_INFO3("Lun: " DWORD_X ", Channel: " DWORD_X, Lun, Channel);
 	}
 
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_lock(&ifdh_context_mutex);
-#endif
 
 	reader_index = GetNewReaderIndex(Lun);
 
-#ifdef HAVE_PTHREAD
 	(void)pthread_mutex_unlock(&ifdh_context_mutex);
-#endif
 
 	if (-1 == reader_index)
 		return IFD_COMMUNICATION_ERROR;
@@ -258,7 +237,7 @@ EXTERNAL RESPONSECODE IFDHCreateChannel(DWORD Lun, DWORD Channel)
 	 * port listed by Channel.  For example, the first serial reader on
 	 * COM1 would link to /dev/pcsc/1 which would be a sym link to
 	 * /dev/ttyS0 on some machines This is used to help with intermachine
-	 * independance.
+	 * independence.
 	 *
 	 * Once the channel is opened the reader must be in a state in which
 	 * it is possible to query IFDHICCPresence() for card status.
@@ -288,11 +267,11 @@ EXTERNAL RESPONSECODE IFDHCloseChannel(DWORD Lun)
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO3("%s (lun: " DWORD_X ")", CcidSlots[reader_index].readerName,
+	DEBUG_INFO3(LOG_STRING " (lun: " DWORD_X ")", CcidSlots[reader_index].readerName,
 		Lun);
 
 	/* Restore the default timeout
-	 * No need to wait too long if the reader disapeared */
+	 * No need to wait too long if the reader disappeared */
 	get_ccid_descriptor(reader_index)->readTimeout = DEFAULT_COM_READ_TIMEOUT;
 
 	(void)CmdPowerOff(reader_index);
@@ -314,7 +293,7 @@ static RESPONSECODE IFDHPolling(DWORD Lun, int timeout)
 
 	/* log only if DEBUG_LEVEL_PERIODIC is set */
 	if (LogLevel & DEBUG_LEVEL_PERIODIC)
-		DEBUG_INFO4("%s (lun: " DWORD_X ") %d ms",
+		DEBUG_INFO4(LOG_STRING " (lun: " DWORD_X ") %d ms",
 			CcidSlots[reader_index].readerName, Lun, timeout);
 
 	return InterruptRead(reader_index, timeout);
@@ -329,7 +308,7 @@ static RESPONSECODE IFDHSleep(DWORD Lun, int timeout)
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO4("%s (lun: " DWORD_X ") %d ms",
+	DEBUG_INFO4(LOG_STRING " (lun: " DWORD_X ") %d ms",
 		CcidSlots[reader_index].readerName, Lun, timeout);
 
 	/* just sleep for 5 seconds since the polling thread is NOT killable
@@ -350,7 +329,7 @@ static RESPONSECODE IFDHStopPolling(DWORD Lun)
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO3("%s (lun: " DWORD_X ")",
+	DEBUG_INFO3(LOG_STRING " (lun: " DWORD_X ")",
 		CcidSlots[reader_index].readerName, Lun);
 
 	(void)InterruptStop(reader_index);
@@ -385,7 +364,7 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO4("tag: 0x" DWORD_X ", %s (lun: " DWORD_X ")", Tag,
+	DEBUG_INFO4("tag: 0x" DWORD_X ", " LOG_STRING " (lun: " DWORD_X ")", Tag,
 		CcidSlots[reader_index].readerName, Lun);
 
 	switch (Tag)
@@ -432,7 +411,6 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 				*Value = 0;
 			break;
 
-#ifdef HAVE_PTHREAD
 		case TAG_IFD_SIMULTANEOUS_ACCESS:
 			if (*Length >= 1)
 			{
@@ -456,30 +434,17 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 			else
 				return_value = IFD_ERROR_INSUFFICIENT_BUFFER;
 			break;
-#endif
 
 		case TAG_IFD_SLOTS_NUMBER:
 			if (*Length >= 1)
 			{
 				*Length = 1;
-				*Value = 1 + get_ccid_descriptor(reader_index) -> bMaxSlotIndex;
 #ifdef USE_COMPOSITE_AS_MULTISLOT
-				{
-					/* On MacOS X or Linux+libusb we can simulate a
-					 * composite device with 2 CCID interfaces by a
-					 * multi-slot reader */
-					int readerID =  get_ccid_descriptor(reader_index) -> readerID;
-
-					/* 2 CCID interfaces */
-					if ((GEMALTOPROXDU == readerID)
-						|| (GEMALTOPROXSU == readerID)
-						|| (HID_OMNIKEY_5422 == readerID))
-						*Value = 2;
-
-					/* 4 CCID interfaces */
-					if (FEITIANR502DUAL == readerID)
-						*Value = 4;
-				}
+				/* On MacOS X we can simulate a composite device with 2
+				 * CCID interfaces by a multi-slot reader */
+				*Value = get_ccid_descriptor(reader_index) -> num_interfaces;
+#else
+				*Value = 1 + get_ccid_descriptor(reader_index) -> bMaxSlotIndex;
 #endif
 				DEBUG_INFO2("Reader supports %d slot(s)", *Value);
 			}
@@ -490,8 +455,12 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 		case TAG_IFD_SLOT_THREAD_SAFE:
 			if (*Length >= 1)
 			{
+				_ccid_descriptor *ccid_desc =  get_ccid_descriptor(reader_index);
 				*Length = 1;
-				*Value = 0; /* Can NOT talk to multiple slots at the same time */
+				if (ccid_desc->bMaxSlotIndex +1 == ccid_desc->bMaxCCIDBusySlots)
+					*Value = 1; /* all slots can be used simultanesously */
+				else
+					*Value = 0; /* Can NOT talk to multiple slots at the same time */
 			}
 			else
 				return_value = IFD_ERROR_INSUFFICIENT_BUFFER;
@@ -602,6 +571,13 @@ EXTERNAL RESPONSECODE IFDHGetCapabilities(DWORD Lun, DWORD Tag,
 			break;
 #endif
 
+#ifdef TAG_IFD_DEVICE_REMOVED
+		case TAG_IFD_DEVICE_REMOVED:
+			if (Value && (1 == *Length))
+				Value[0] = 1;
+			break;
+#endif
+
 		case SCARD_ATTR_VENDOR_IFD_SERIAL_NO:
 			{
 				_ccid_descriptor *ccid_desc;
@@ -661,6 +637,7 @@ EXTERNAL RESPONSECODE IFDHSetCapabilities(DWORD Lun, DWORD Tag,
 	 * IFD_ERROR_VALUE_READ_ONLY
 	 */
 
+	RESPONSECODE return_value = IFD_SUCCESS;
 	(void)Length;
 	(void)Value;
 
@@ -669,10 +646,23 @@ EXTERNAL RESPONSECODE IFDHSetCapabilities(DWORD Lun, DWORD Tag,
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO4("tag: 0x" DWORD_X ", %s (lun: " DWORD_X ")", Tag,
+	DEBUG_INFO4("tag: 0x" DWORD_X ", " LOG_STRING " (lun: " DWORD_X ")", Tag,
 		CcidSlots[reader_index].readerName, Lun);
 
-	return IFD_NOT_SUPPORTED;
+	switch (Tag)
+	{
+#ifdef TAG_IFD_DEVICE_REMOVED
+		case TAG_IFD_DEVICE_REMOVED:
+			if ((1 == Length) && (Value != NULL) && (Value[0] != 0))
+				DisconnectPort(reader_index);
+			break;
+#endif
+
+		default:
+			return_value = IFD_ERROR_TAG;
+	}
+
+	return return_value;
 } /* IFDHSetCapabilities */
 
 
@@ -712,7 +702,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO4("protocol T=" DWORD_D ", %s (lun: " DWORD_X ")",
+	DEBUG_INFO4("protocol T=" DWORD_D ", " LOG_STRING " (lun: " DWORD_X ")",
 		Protocol-SCARD_PROTOCOL_T0, CcidSlots[reader_index].readerName, Lun);
 
 	/* Set to zero buffer */
@@ -791,10 +781,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 	/* Do not send CCID command SetParameters or PPS to the CCID
 	 * The CCID will do this himself */
 	if (ccid_desc->dwFeatures & CCID_CLASS_AUTO_PPS_PROP)
-	{
-		DEBUG_COMM2("Timeout: %d ms", ccid_desc->readTimeout);
 		goto end;
-	}
 
 	/* PTS1? */
 	if (Flags & IFD_NEGOTIATE_PTS1)
@@ -830,6 +817,8 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 			default_baudrate = (unsigned int) (1000 * ccid_desc->dwDefaultClock
 				* ATR_DEFAULT_D / ATR_DEFAULT_F);
 
+			DEBUG_COMM2("Card can work at %d bauds", card_baudrate);
+
 			/* if the card does not try to lower the default speed */
 			if ((card_baudrate > default_baudrate)
 				/* and the reader is fast enough */
@@ -837,7 +826,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 			{
 				/* the reader has no baud rates table */
 				if ((NULL == ccid_desc->arrayOfSupportedDataRates)
-					/* or explicitely support it */
+					/* or explicitly support it */
 					|| find_baud_rate(card_baudrate,
 						ccid_desc->arrayOfSupportedDataRates))
 				{
@@ -867,6 +856,9 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 				{
 					unsigned char old_TA1;
 
+					DEBUG_COMM2("Reader can't do more than %d bauds",
+						ccid_desc->dwMaxDataRate);
+
 					old_TA1 = atr.ib[0][ATR_INTERFACE_BYTE_TA].value;
 					while (atr.ib[0][ATR_INTERFACE_BYTE_TA].value > 0x94)
 					{
@@ -887,7 +879,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 							ccid_desc->arrayOfSupportedDataRates))
 							/* or the reader has NO baud rate table */
 							|| ((NULL == ccid_desc->arrayOfSupportedDataRates)
-							/* and the baud rate is bellow the limit */
+							/* and the baud rate is below the limit */
 							&& (card_baudrate <= ccid_desc->dwMaxDataRate)))
 						{
 							pps[1] |= 0x10; /* PTS1 presence */
@@ -926,7 +918,7 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 
 	/* Automatic PPS made by the ICC? */
 	if ((! (ccid_desc->dwFeatures & CCID_CLASS_AUTO_PPS_CUR))
-		/* TA2 absent: negociable mode */
+		/* TA2 absent: negotiable mode */
 		&& (! atr.ib[1][ATR_INTERFACE_BYTE_TA].present))
 	{
 		int default_protocol;
@@ -958,13 +950,14 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 		}
 	}
 
-	/* Now we must set the reader parameters */
-	if (ATR_MALFORMED == ATR_GetConvention(&atr, &convention))
-		return IFD_COMMUNICATION_ERROR;
-
 	/* specific mode and implicit parameters? (b5 of TA2) */
 	if (atr.ib[1][ATR_INTERFACE_BYTE_TA].present
 		&& (atr.ib[1][ATR_INTERFACE_BYTE_TA].value & 0x10))
+		return IFD_COMMUNICATION_ERROR;
+
+end:
+	/* Now we must set the reader parameters */
+	if (ATR_MALFORMED == ATR_GetConvention(&atr, &convention))
 		return IFD_COMMUNICATION_ERROR;
 
 	/* T=1 */
@@ -1046,9 +1039,36 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 
 		DEBUG_COMM2("Timeout: %d ms", ccid_desc->readTimeout);
 
-		ret = SetParameters(reader_index, 1, sizeof(param), param);
-		if (IFD_SUCCESS != ret)
-			return ret;
+		if (ccid_desc->dwFeatures & CCID_CLASS_AUTO_PPS_PROP)
+			DEBUG_COMM("Skip SetParameters");
+		else
+		{
+			ret = SetParameters(reader_index, 1, sizeof(param), param);
+			if (IFD_SUCCESS != ret)
+			{
+				if (ALCORMICRO_AU9540 == ccid_desc -> readerID)
+				{
+					/* Set Parameters failed
+					 * reset the card and continue without Set Parameters */
+
+					UCHAR atr2[MAX_ATR_SIZE];
+					DWORD atr2length;
+					RESPONSECODE ret2;
+
+					/* 1st (cold?) reset */
+					ret2 = IFDHPowerICC(Lun, IFD_RESET, atr2, &atr2length);
+					if (IFD_SUCCESS != ret2)
+						return ret;
+
+					/* hot reset */
+					ret2 = IFDHPowerICC(Lun, IFD_RESET, atr2, &atr2length);
+					if (IFD_SUCCESS != ret2)
+						return ret;
+				}
+				else
+					return ret;
+			}
+		}
 	}
 	else
 	/* T=0 */
@@ -1085,14 +1105,18 @@ EXTERNAL RESPONSECODE IFDHSetProtocolParameters(DWORD Lun, DWORD Protocol,
 		ccid_desc->readTimeout = T0_card_timeout(f, d, param[2] /* TC1 */,
 			param[3] /* TC2 */, ccid_desc->dwDefaultClock);
 
-		DEBUG_COMM2("Communication timeout: %d ms", ccid_desc->readTimeout);
+		DEBUG_COMM2("Timeout: %d ms", ccid_desc->readTimeout);
 
-		ret = SetParameters(reader_index, 0, sizeof(param), param);
-		if (IFD_SUCCESS != ret)
-			return ret;
+		if (ccid_desc->dwFeatures & CCID_CLASS_AUTO_PPS_PROP)
+			DEBUG_COMM("Skip SetParameters");
+		else
+		{
+			ret = SetParameters(reader_index, 0, sizeof(param), param);
+			if (IFD_SUCCESS != ret)
+				return ret;
+		}
 	}
 
-end:
 	/* set IFSC & IFSD in T=1 */
 	if ((SCARD_PROTOCOL_T1 == Protocol)
 		&& (CCID_CLASS_TPDU == (ccid_desc->dwFeatures & CCID_CLASS_EXCHANGE_MASK)))
@@ -1107,7 +1131,7 @@ end:
 			(void)t1_set_param(t1, IFD_PROTOCOL_T1_IFSC, ifsc);
 		}
 
-		/* IFSD not negociated by the reader? */
+		/* IFSD not negotiated by the reader? */
 		if (! (ccid_desc->dwFeatures & CCID_CLASS_AUTO_IFSD))
 		{
 			DEBUG_COMM2("Negotiate IFSD at %d", ccid_desc -> dwMaxIFSD);
@@ -1167,7 +1191,7 @@ EXTERNAL RESPONSECODE IFDHPowerICC(DWORD Lun, DWORD Action,
 
 	unsigned int nlength;
 	RESPONSECODE return_value = IFD_SUCCESS;
-	unsigned char pcbuffer[10+MAX_ATR_SIZE];
+	unsigned char pcbuffer[MAX_ATR_SIZE];
 	int reader_index;
 #ifndef NO_LOG
 	const char *actions[] = { "PowerUp", "PowerDown", "Reset" };
@@ -1181,7 +1205,7 @@ EXTERNAL RESPONSECODE IFDHPowerICC(DWORD Lun, DWORD Action,
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_INFO4("action: %s, %s (lun: " DWORD_X ")",
+	DEBUG_INFO4("action: " LOG_STRING ", " LOG_STRING " (lun: " DWORD_X ")",
 		actions[Action-IFD_POWER_UP], CcidSlots[reader_index].readerName, Lun);
 
 	switch (Action)
@@ -1195,7 +1219,10 @@ EXTERNAL RESPONSECODE IFDHPowerICC(DWORD Lun, DWORD Action,
 			CcidSlots[reader_index].bPowerFlags |= MASK_POWERFLAGS_PDWN;
 
 			/* send the command */
-			if (IFD_SUCCESS != CmdPowerOff(reader_index))
+			return_value = CmdPowerOff(reader_index);
+			if (IFD_NO_SUCH_DEVICE == return_value)
+				goto end;
+			if (IFD_SUCCESS != return_value)
 			{
 				DEBUG_CRITICAL("PowerDown failed");
 				return_value = IFD_ERROR_POWER_ACTION;
@@ -1320,7 +1347,7 @@ EXTERNAL RESPONSECODE IFDHTransmitToICC(DWORD Lun, SCARD_IO_HEADER SendPci,
 	unsigned int rx_length;
 	int reader_index;
 	int old_read_timeout;
-	int restore_timeout = FALSE;
+	bool restore_timeout = false;
 	_ccid_descriptor *ccid_descriptor;
 
 	(void)RecvPci;
@@ -1330,7 +1357,7 @@ EXTERNAL RESPONSECODE IFDHTransmitToICC(DWORD Lun, SCARD_IO_HEADER SendPci,
 
 	ccid_descriptor = get_ccid_descriptor(reader_index);
 
-	DEBUG_INFO3("%s (lun: " DWORD_X ")", CcidSlots[reader_index].readerName,
+	DEBUG_INFO3(LOG_STRING " (lun: " DWORD_X ")", CcidSlots[reader_index].readerName,
 		Lun);
 
 	/* special APDU for the Kobil IDToken (CLASS = 0xFF) */
@@ -1389,7 +1416,7 @@ EXTERNAL RESPONSECODE IFDHTransmitToICC(DWORD Lun, SCARD_IO_HEADER SendPci,
 	if (0 == memcmp(TxBuffer, "\xFF\xC2\x01", 3))
 	{
 		/* Yes, use the same timeout as for SCardControl() */
-		restore_timeout = TRUE;
+		restore_timeout = true;
 		old_read_timeout = ccid_descriptor -> readTimeout;
 		ccid_descriptor -> readTimeout = 90 * 1000;	/* 90 seconds */
 	}
@@ -1438,7 +1465,7 @@ EXTERNAL RESPONSECODE IFDHControl(DWORD Lun, DWORD dwControlCode,
 
 	ccid_descriptor = get_ccid_descriptor(reader_index);
 
-	DEBUG_INFO4("ControlCode: 0x" DWORD_X ", %s (lun: " DWORD_X ")",
+	DEBUG_INFO4("ControlCode: 0x" DWORD_X ", " LOG_STRING " (lun: " DWORD_X ")",
 		dwControlCode, CcidSlots[reader_index].readerName, Lun);
 	DEBUG_INFO_XXD("Control TxBuffer: ", TxBuffer, TxLength);
 
@@ -1447,7 +1474,7 @@ EXTERNAL RESPONSECODE IFDHControl(DWORD Lun, DWORD dwControlCode,
 
 	if (IOCTL_SMARTCARD_VENDOR_IFD_EXCHANGE == dwControlCode)
 	{
-		int allowed = (DriverOptions & DRIVER_OPTION_CCID_EXCHANGE_AUTHORIZED);
+		bool allowed = (DriverOptions & DRIVER_OPTION_CCID_EXCHANGE_AUTHORIZED);
 		int readerID = ccid_descriptor -> readerID;
 
 		if (VENDOR_GEMALTO == GET_VENDOR(readerID))
@@ -1456,7 +1483,7 @@ EXTERNAL RESPONSECODE IFDHControl(DWORD Lun, DWORD dwControlCode,
 
 			/* get firmware version escape command */
 			if ((1 == TxLength) && (0x02 == TxBuffer[0]))
-				allowed = TRUE;
+				allowed = true;
 
 			/* switch interface escape command on the GemProx DU
 			 * the next byte in the command is the interface:
@@ -1466,8 +1493,12 @@ EXTERNAL RESPONSECODE IFDHControl(DWORD Lun, DWORD dwControlCode,
 			if ((GEMALTOPROXDU == readerID)
 				&& (6 == TxLength)
 				&& (0 == memcmp(TxBuffer, switch_interface, sizeof(switch_interface))))
-				allowed = TRUE;
+				allowed = true;
 		}
+
+		/* allow APDU exchange with this reader without a card in the field */
+		if (HID_OMNIKEY_5427CK == readerID)
+			allowed = true;
 
 		if (!allowed)
 		{
@@ -1855,6 +1886,72 @@ EXTERNAL RESPONSECODE IFDHControl(DWORD Lun, DWORD dwControlCode,
 		}
 	}
 
+#ifdef ENABLE_MULTIPLE_ENABLED_PROFILES
+	/* Multiple Enabled Profiles (MEP)
+	 * https://source.android.com/docs/core/connect/esim-mep */
+	if (SCARD_CTL_CODE(3600) == dwControlCode)
+	{
+		DEBUG_INFO1("Control command for MEP");
+
+		if (CCID_CLASS_TPDU != (ccid_descriptor->dwFeatures & CCID_CLASS_EXCHANGE_MASK))
+		{
+			DEBUG_INFO1("Reader is NOT in TPDU mode");
+			return_value = IFD_NOT_SUPPORTED;
+		}
+		else
+		{
+			/* Set T=1 NAD */
+			if (TxLength == 4
+				&& (TxBuffer[0] == 0x3E)
+				&& (TxBuffer[1] == 0x00)
+				&& (TxBuffer[2] == 0x01))
+			{
+				RxBuffer[0] = 0x3E;
+				RxBuffer[1] = 0x00;
+				RxBuffer[2] = 0x01;
+				DEBUG_INFO1("Set NAD value");
+				if (t1_set_param(&CcidSlots[reader_index].t1, IFD_PROTOCOL_T1_NAD,
+					TxBuffer[3]))
+					/* error */
+					RxBuffer[3] = 0x01;
+				else
+					RxBuffer[3] = 0x00;
+				*pdwBytesReturned = 4;
+				return_value = IFD_SUCCESS;
+			}
+
+			/* Get T=1 NAD */
+			if (TxLength == 3
+				&& (TxBuffer[0] == 0x3F)
+				&& (TxBuffer[1] == 0x00)
+				&& (TxBuffer[2] == 0x00))
+			{
+				int value = 0;
+
+				RxBuffer[0] = 0x3F;
+				RxBuffer[1] = 0x00;
+				RxBuffer[2] = 0x02;
+				DEBUG_INFO1("Get NAD value");
+				value = t1_get_param(&CcidSlots[reader_index].t1,
+					IFD_PROTOCOL_T1_NAD);
+				if (-1 == value)
+				{
+					/* error */
+					RxBuffer[3] = 0x01;
+					RxBuffer[4] = 0x00;
+				}
+				else
+				{
+					RxBuffer[3] = 0x00;
+					RxBuffer[4] = value;
+				}
+				*pdwBytesReturned = 5;
+				return_value = IFD_SUCCESS;
+			}
+		}
+	}
+#endif
+
 	if (IFD_SUCCESS != return_value)
 		*pdwBytesReturned = 0;
 
@@ -1883,7 +1980,7 @@ EXTERNAL RESPONSECODE IFDHICCPresence(DWORD Lun)
 	if (-1 == (reader_index = LunToReaderIndex(Lun)))
 		return IFD_COMMUNICATION_ERROR;
 
-	DEBUG_PERIODIC3("%s (lun: " DWORD_X ")", CcidSlots[reader_index].readerName, Lun);
+	DEBUG_PERIODIC3(LOG_STRING " (lun: " DWORD_X ")", CcidSlots[reader_index].readerName, Lun);
 
 	ccid_descriptor = get_ccid_descriptor(reader_index);
 
@@ -1891,7 +1988,7 @@ EXTERNAL RESPONSECODE IFDHICCPresence(DWORD Lun)
 		&& (ccid_descriptor->IFD_bcdDevice < 0x0200))
 	{
 		/* GemCore SIM Pro firmware 2.00 and up features
-		 * a full independant second slot */
+		 * a full independent second slot */
 		return_value = ccid_descriptor->dwSlotStatus;
 		goto end;
 	}
@@ -1914,6 +2011,12 @@ EXTERNAL RESPONSECODE IFDHICCPresence(DWORD Lun)
 
 	/* set back the old LogLevel */
 	LogLevel = oldLogLevel;
+
+	if (IFD_NO_SUCH_DEVICE == return_value)
+	{
+		return_value = IFD_ICC_NOT_PRESENT;
+		goto end;
+	}
 
 	if (return_value != IFD_SUCCESS)
 		return return_value;
@@ -2003,7 +2106,7 @@ EXTERNAL RESPONSECODE IFDHICCPresence(DWORD Lun)
 #endif
 
 end:
-	DEBUG_PERIODIC2("Card %s",
+	DEBUG_PERIODIC2("Card " LOG_STRING,
 		IFD_ICC_PRESENT == return_value ? "present" : "absent");
 
 	return return_value;
@@ -2022,12 +2125,18 @@ void init_driver(void)
 	char *e;
 	int rv;
 	list_t plist, *values;
+	const char * hpDirPath;
 
 	DEBUG_INFO1("Driver version: " VERSION);
 
+	/* Check if path override present in environment */
+	hpDirPath = SYS_GetEnv("PCSCLITE_HP_DROPDIR");
+	if (NULL == hpDirPath)
+		hpDirPath = PCSCLITE_HP_DROPDIR;
+
 	/* Info.plist full patch filename */
 	(void)snprintf(infofile, sizeof(infofile), "%s/%s/Contents/Info.plist",
-		PCSCLITE_HP_DROPDIR, BUNDLE);
+		hpDirPath, BUNDLE);
 
 	rv = bundleParse(infofile, &plist);
 	if (0 == rv)
@@ -2090,11 +2199,11 @@ void init_driver(void)
 	/* initialise the Lun to reader_index mapping */
 	InitReaderIndex();
 
-	DebugInitialized = TRUE;
+	DebugInitialized = true;
 } /* init_driver */
 
 
-static char find_baud_rate(unsigned int baudrate, unsigned int *list)
+static bool find_baud_rate(unsigned int baudrate, unsigned int *list)
 {
 	int i;
 
@@ -2113,10 +2222,10 @@ static char find_baud_rate(unsigned int baudrate, unsigned int *list)
 		 * is an approximative result, computed from the d/f float result.
 		 */
 		if ((baudrate < list[i] + 2) && (baudrate > list[i] - 2))
-			return TRUE;
+			return true;
 	}
 
-	return FALSE;
+	return false;
 } /* find_baud_rate */
 
 
@@ -2187,7 +2296,7 @@ static unsigned int T1_card_timeout(double f, double d, int TC1,
 	 *   interface device and the last one (NAD PCB LN APDU CKS) = 260 EGT,
 	 * - delay between ISO in and ISO out = BWT,
 	 * - ISO out delay between leading edge of the first character sent by the
-	 *   card and the last one (NAD PCB LN DATAS CKS) = 260 CWT.
+	 *   card and the last one (NAD PCB LN DATA CKS) = 260 CWT.
 	 */
 
 	/* clock_frequency is in kHz so the times are in milliseconds and not
@@ -2209,7 +2318,7 @@ static unsigned int T1_card_timeout(double f, double d, int TC1,
 	BWT = 11 * etu + (1<<BWI) * 960 * 372 / clock_frequency;
 
 	/* card CWT */
-	/* see ch. 9.5.3.1 Caracter Waiting Time, page 20 of ISO 7816-3 */
+	/* see ch. 9.5.3.1 Character Waiting Time, page 20 of ISO 7816-3 */
 	CWT = (11 + (1<<CWI)) * etu;
 
 	timeout = 260*EGT + BWT + 260*CWT;

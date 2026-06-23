@@ -26,21 +26,7 @@
  * Get configuration information
  */
 
-#ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
-
-/*
- * Boolean constants
- */
-
-#ifndef TRUE
-#define TRUE	1
-#endif
-
-#ifndef FALSE
-#define FALSE	0
-#endif
 
 /*
  * Type definitions

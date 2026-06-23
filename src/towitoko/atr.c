@@ -21,11 +21,10 @@
 */
 
 #include <config.h>
+#include <stdbool.h>
 
 #include "atr.h"
-#ifdef HAVE_STRING_H
 #include <string.h>
-#endif
 #include "debug.h"
 
 /*
@@ -84,12 +83,12 @@ ATR_InitFromArray (ATR_t * atr, const BYTE atr_buffer[ATR_MAX_SIZE], unsigned le
   atr->hbn = TDi & 0x0F;
 
   /* TCK is not present by default */
-  (atr->TCK).present = FALSE;
+  (atr->TCK).present = false;
 
   /* Extract interface bytes */
   while (pointer < length)
     {
-      /* Check buffer is long enought */
+      /* Check buffer is long enough */
       if (pointer + atr_num_ib_table[(0xF0 & TDi) >> 4] >= length)
 	{
 	  return (ATR_MALFORMED);
@@ -99,36 +98,36 @@ ATR_InitFromArray (ATR_t * atr, const BYTE atr_buffer[ATR_MAX_SIZE], unsigned le
 	{
 	  pointer++;
 	  atr->ib[pn][ATR_INTERFACE_BYTE_TA].value = atr_buffer[pointer];
-	  atr->ib[pn][ATR_INTERFACE_BYTE_TA].present = TRUE;
+	  atr->ib[pn][ATR_INTERFACE_BYTE_TA].present = true;
 	}
       else
-	atr->ib[pn][ATR_INTERFACE_BYTE_TA].present = FALSE;
+	atr->ib[pn][ATR_INTERFACE_BYTE_TA].present = false;
       /* Check TBi is present */
       if ((TDi | 0xDF) == 0xFF)
 	{
 	  pointer++;
 	  atr->ib[pn][ATR_INTERFACE_BYTE_TB].value = atr_buffer[pointer];
-	  atr->ib[pn][ATR_INTERFACE_BYTE_TB].present = TRUE;
+	  atr->ib[pn][ATR_INTERFACE_BYTE_TB].present = true;
 	}
       else
-	atr->ib[pn][ATR_INTERFACE_BYTE_TB].present = FALSE;
+	atr->ib[pn][ATR_INTERFACE_BYTE_TB].present = false;
 
       /* Check TCi is present */
       if ((TDi | 0xBF) == 0xFF)
 	{
 	  pointer++;
 	  atr->ib[pn][ATR_INTERFACE_BYTE_TC].value = atr_buffer[pointer];
-	  atr->ib[pn][ATR_INTERFACE_BYTE_TC].present = TRUE;
+	  atr->ib[pn][ATR_INTERFACE_BYTE_TC].present = true;
 	}
       else
-	atr->ib[pn][ATR_INTERFACE_BYTE_TC].present = FALSE;
+	atr->ib[pn][ATR_INTERFACE_BYTE_TC].present = false;
 
       /* Read TDi if present */
       if ((TDi | 0x7F) == 0xFF)
 	{
 	  pointer++;
 	  TDi = atr->ib[pn][ATR_INTERFACE_BYTE_TD].value = atr_buffer[pointer];
-	  atr->ib[pn][ATR_INTERFACE_BYTE_TD].present = TRUE;
+	  atr->ib[pn][ATR_INTERFACE_BYTE_TD].present = true;
 	  (atr->TCK).present = ((TDi & 0x0F) != ATR_PROTOCOL_TYPE_T0);
 	  pn++;
 	  if (pn >= ATR_MAX_PROTOCOLS)
@@ -136,7 +135,7 @@ ATR_InitFromArray (ATR_t * atr, const BYTE atr_buffer[ATR_MAX_SIZE], unsigned le
 	}
       else
 	{
-	  atr->ib[pn][ATR_INTERFACE_BYTE_TD].present = FALSE;
+	  atr->ib[pn][ATR_INTERFACE_BYTE_TD].present = false;
 	  break;
 	}
     }

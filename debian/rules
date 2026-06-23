@@ -7,9 +7,12 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@
 
+override_dh_autoreconf:
+	rm configure.ac Makefile.am
+
 override_dh_auto_configure:
 	# add support of the GemPC Twin in serial mode
-	dh_auto_configure -- --enable-twinserial --enable-serialconfdir=/etc/reader.conf.d
+	dh_auto_configure -- -Dserial=true
 
 override_dh_auto_install:
 	dh_auto_install
