@@ -1,3 +1,10 @@
+ccid (1.6.2-1deepin1) unstable; urgency=medium
+
+  [ luxinyou ]
+  * Adapt reader for wotrus MeSince MK-1.
+
+ -- lichenggang <lichenggang@deepin.org>  Wed, 24 Jun 2026 10:25:59 +0800
+
 ccid (1.6.2-1) unstable; urgency=medium
 
   * New upstream release
